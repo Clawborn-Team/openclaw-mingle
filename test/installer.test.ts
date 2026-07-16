@@ -57,6 +57,7 @@ describe("Mingle OpenClaw installer", () => {
 
   it("installs, configures, and restarts OpenClaw without invoking a shell", async () => {
     const run = vi.fn(async () => undefined);
+    const read = vi.fn(async () => undefined);
     await installMingle(
       {
         agentId: "agent_7hqq5o",
@@ -65,8 +66,10 @@ describe("Mingle OpenClaw installer", () => {
         pluginSource: "git:github.com/Clawborn-Team/openclaw-mingle@main",
       },
       run,
+      read,
     );
 
+    expect(read).toHaveBeenCalledWith(["config", "get", "tools.alsoAllow", "--json"]);
     expect(run.mock.calls).toEqual([
       [["plugins", "install", "git:github.com/Clawborn-Team/openclaw-mingle@main"]],
       [["config", "set", "plugins.entries.openclaw-mingle.enabled", "true"]],
@@ -98,7 +101,40 @@ describe("Mingle OpenClaw installer", () => {
           "mingle:agent_7hqq5o",
         ],
       ],
+      [
+        [
+          "config",
+          "set",
+          "tools.alsoAllow",
+          '["message","openclaw-mingle"]',
+          "--strict-json",
+        ],
+      ],
       [["gateway", "restart"]],
+    ]);
+  });
+
+  it("preserves existing additive tool permissions without creating duplicates", async () => {
+    const run = vi.fn(async () => undefined);
+    const read = vi.fn(async () => '["browser","message"]\n');
+
+    await installMingle(
+      {
+        agentId: "jarvis",
+        serverUrl: "https://mingle.example",
+        apiKey: "secret",
+        pluginSource: "git:github.com/Clawborn-Team/openclaw-mingle@main",
+      },
+      run,
+      read,
+    );
+
+    expect(run).toHaveBeenCalledWith([
+      "config",
+      "set",
+      "tools.alsoAllow",
+      '["browser","message","openclaw-mingle"]',
+      "--strict-json",
     ]);
   });
 });

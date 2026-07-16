@@ -10,6 +10,7 @@ export type InstallerOptions = {
 };
 
 export type OpenClawRunner = (args: string[]) => Promise<void>;
+export type OpenClawReader = (args: string[]) => Promise<string | undefined>;
 
 function required(values: Map<string, string>, flag: string): string {
   const value = values.get(flag)?.trim();
@@ -74,11 +75,47 @@ export async function runOpenClaw(args: string[]): Promise<void> {
   });
 }
 
+export async function readOpenClaw(args: string[]): Promise<string | undefined> {
+  return new Promise<string | undefined>((resolve, reject) => {
+    const executable = process.env.MINGLE_OPENCLAW_BIN?.trim() || "openclaw";
+    const child = spawn(executable, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.once("error", (error) => reject(new Error(`Could not start OpenClaw CLI: ${error.message}`)));
+    child.once("exit", (code) => resolve(code === 0 ? stdout : undefined));
+  });
+}
+
+function mergeToolAllowlist(raw: string | undefined): string[] {
+  let existing: unknown = [];
+  if (raw?.trim()) {
+    try {
+      existing = JSON.parse(raw);
+    } catch {
+      existing = [];
+    }
+  }
+  const values = Array.isArray(existing)
+    ? existing.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  return [...new Set([...values.map((value) => value.trim()), "message", "openclaw-mingle"])];
+}
+
 export async function installMingle(
   options: InstallerOptions,
   run: OpenClawRunner = runOpenClaw,
+  read: OpenClawReader = readOpenClaw,
 ): Promise<void> {
   const accountPath = `channels.mingle.accounts.${options.agentId}`;
+  const toolAllowlist = mergeToolAllowlist(
+    await read(["config", "get", "tools.alsoAllow", "--json"]),
+  );
   const commands = [
     ["plugins", "install", options.pluginSource],
     ["config", "set", "plugins.entries.openclaw-mingle.enabled", "true"],
@@ -87,6 +124,13 @@ export async function installMingle(
     ["config", "set", `${accountPath}.baseUrl`, options.serverUrl],
     ["config", "set", `${accountPath}.apiKey`, options.apiKey],
     ["agents", "bind", "--agent", options.agentId, "--bind", `mingle:${options.agentId}`],
+    [
+      "config",
+      "set",
+      "tools.alsoAllow",
+      JSON.stringify(toolAllowlist),
+      "--strict-json",
+    ],
     ["gateway", "restart"],
   ];
   for (const command of commands) await run(command);

@@ -6,7 +6,7 @@ import {
   type MingleChannelRuntime,
 } from "./inbound.js";
 import { MalformedMingleEventError, UnsupportedMingleEventError } from "./packet.js";
-import type { DeliveryStateStore } from "./state.js";
+import { RecentMingleSourceStore, type DeliveryStateStore } from "./state.js";
 import type { ResolvedMingleAccount } from "./types.js";
 
 export type MingleMonitorState =
@@ -60,12 +60,15 @@ export async function monitorMingleAccount(options: {
   random?: () => number;
   now?: () => number;
   digestIntervalMs?: number;
+  recentSources?: RecentMingleSourceStore;
 }): Promise<void> {
   const dispatch = options.dispatch ?? dispatchMingleEvent;
   const sleep = options.sleep ?? abortableSleep;
   const random = options.random ?? Math.random;
   const now = options.now ?? Date.now;
   const digestIntervalMs = options.digestIntervalMs ?? DEFAULT_DIGEST_INTERVAL_MS;
+  const recentSources =
+    options.recentSources ?? new RecentMingleSourceStore({ accountId: options.account.accountId });
   let cursor = (await options.state.load()).cursor;
   let retryAttempt = 0;
   let nextDigestAt = now() + digestIntervalMs;
@@ -110,6 +113,7 @@ export async function monitorMingleAccount(options: {
             notifications,
             channelRuntime: options.channelRuntime,
             client: options.client,
+            recentSources,
           });
         } catch (error) {
           await options.client.nack(event.id, nackReason(error), options.abortSignal);
@@ -146,6 +150,7 @@ export async function monitorMingleAccount(options: {
             notifications: pendingNotifications,
             channelRuntime: options.channelRuntime,
             client: options.client,
+            recentSources,
           });
         } catch {
           nextDigestAt = now() + digestIntervalMs;

@@ -154,6 +154,7 @@ describe("dispatchMingleEvent", () => {
     });
     const sendDm = vi.fn();
     const postChannel = vi.fn(async () => ({ id: "reply-group-1" }));
+    const record = vi.fn(async () => undefined);
 
     await dispatchMingleEvent({
       cfg: { session: {} } as never,
@@ -162,6 +163,7 @@ describe("dispatchMingleEvent", () => {
       notifications: [],
       channelRuntime: runtime as never,
       client: { sendDm, postChannel },
+      recentSources: { record },
     });
 
     expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
@@ -182,6 +184,21 @@ describe("dispatchMingleEvent", () => {
       "mingle-reply:evt-group-1:0",
     );
     expect(sendDm).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith({
+      target: "group:builders",
+      kind: "group",
+      label: "Builders",
+      sender: {
+        id: "user-1",
+        username: "alice",
+        displayName: "Alice",
+        type: "user",
+      },
+      eventId: "evt-group-1",
+      messageId: "group-msg-1",
+      messagePreview: "@lobster hello",
+      occurredAt: 456,
+    });
   });
 
   it("routes an active follow-up through the same group session and reply target", async () => {
@@ -250,6 +267,7 @@ describe("dispatchMingleEvent", () => {
     });
     const sendDm = vi.fn();
     const postChannel = vi.fn();
+    const record = vi.fn(async () => undefined);
 
     await dispatchMingleEvent({
       cfg: {} as never,
@@ -258,6 +276,7 @@ describe("dispatchMingleEvent", () => {
       notifications: [],
       channelRuntime: runtime as never,
       client: { sendDm, postChannel },
+      recentSources: { record },
     });
 
     expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
@@ -273,5 +292,6 @@ describe("dispatchMingleEvent", () => {
     });
     expect(sendDm).not.toHaveBeenCalled();
     expect(postChannel).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
   });
 });

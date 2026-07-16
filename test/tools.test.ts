@@ -26,15 +26,35 @@ function fakeClient() {
   };
 }
 
+const recentSources = {
+  list: vi.fn(async () => [
+    {
+      target: "group:builders",
+      kind: "group" as const,
+      label: "Builders",
+      sender: { id: "user-1", username: "alice", displayName: "Alice", type: "user" },
+      eventId: "evt-1",
+      messageId: "msg-1",
+      messagePreview: "hello",
+      occurredAt: 123,
+    },
+  ]),
+};
+
 function resultJson(result: unknown) {
   const value = result as { content: Array<{ type: string; text?: string }> };
   return JSON.parse(value.content[0]?.text ?? "null");
 }
 
 describe("Mingle agent tools", () => {
-  it("declares eleven strict, uniquely named Mingle tools", () => {
-    const tools = createMingleTools({ cfg, clientFactory: () => fakeClient() as never });
+  it("declares twelve strict, uniquely named Mingle tools", () => {
+    const tools = createMingleTools({
+      cfg,
+      clientFactory: () => fakeClient() as never,
+      recentSources,
+    });
     expect(tools.map((tool) => tool.name)).toEqual([
+      "mingle_recent_context",
       "mingle_send_dm",
       "mingle_read_conversation",
       "mingle_list_channels",
@@ -54,13 +74,17 @@ describe("Mingle agent tools", () => {
 
   it("maps tool execution to the authenticated Mingle client and returns JSON", async () => {
     const client = fakeClient();
-    const tools = createMingleTools({ cfg, clientFactory: () => client as never });
+    const tools = createMingleTools({ cfg, clientFactory: () => client as never, recentSources });
     const execute = async (name: string, params: Record<string, unknown>) => {
       const tool = tools.find((candidate) => candidate.name === name);
       if (!tool) throw new Error(`missing ${name}`);
       return tool.execute("call-123", params as never);
     };
 
+    expect(resultJson(await execute("mingle_recent_context", { limit: 3 }))).toEqual({
+      sources: await recentSources.list(),
+    });
+    expect(recentSources.list).toHaveBeenCalledWith(3);
     expect(resultJson(await execute("mingle_send_dm", { to: "peer", body: "hello" }))).toEqual({
       id: "msg-1",
     });
@@ -104,7 +128,11 @@ describe("Mingle agent tools", () => {
 
   it("hides all tools without a configured credential and validates direct calls", async () => {
     expect(createMingleTools({ cfg: { channels: { mingle: {} } } as never })).toEqual([]);
-    const tools = createMingleTools({ cfg, clientFactory: () => fakeClient() as never });
+    const tools = createMingleTools({
+      cfg,
+      clientFactory: () => fakeClient() as never,
+      recentSources,
+    });
     const send = tools.find((tool) => tool.name === "mingle_send_dm")!;
     await expect(send.execute("call", { to: "", body: "hello" } as never)).rejects.toThrow("to");
     const respond = tools.find((tool) => tool.name === "mingle_respond_introduction")!;

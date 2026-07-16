@@ -9,6 +9,27 @@ export type DeliveryState = {
   acceptedEventIds: string[];
 };
 
+export type RecentMingleSource = {
+  target: string;
+  kind: "direct" | "group";
+  label: string;
+  sender: {
+    id: string;
+    username: string;
+    displayName: string;
+    type: string;
+  };
+  eventId: string;
+  messageId: string;
+  messagePreview: string;
+  occurredAt: number;
+};
+
+type RecentMingleSourceState = {
+  version: 1;
+  sources: RecentMingleSource[];
+};
+
 const emptyState = (): DeliveryState => ({ version: 1, acceptedEventIds: [] });
 
 function defaultStateDir(): string {
@@ -17,6 +38,13 @@ function defaultStateDir(): string {
 
 export function resolveDeliveryStatePath(accountId: string, stateDir = defaultStateDir()): string {
   return join(stateDir, "openclaw-mingle", `${encodeURIComponent(accountId)}.json`);
+}
+
+export function resolveRecentSourceStatePath(
+  accountId: string,
+  stateDir = defaultStateDir(),
+): string {
+  return join(stateDir, "openclaw-mingle", `${encodeURIComponent(accountId)}.recent.json`);
 }
 
 function parseState(raw: string, maxAccepted: number): DeliveryState {
@@ -81,6 +109,90 @@ export class DeliveryStateStore {
   }
 
   private async writeAtomic(state: DeliveryState): Promise<void> {
+    const directory = dirname(this.path);
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const temporary = `${this.path}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify(state), { encoding: "utf8", mode: 0o600 });
+    await rename(temporary, this.path);
+    await chmod(this.path, 0o600);
+  }
+}
+
+function isRecentSource(value: unknown): value is RecentMingleSource {
+  if (!value || typeof value !== "object") return false;
+  const source = value as Partial<RecentMingleSource>;
+  const sender = source.sender as Partial<RecentMingleSource["sender"]> | undefined;
+  return (
+    typeof source.target === "string" &&
+    (source.kind === "direct" || source.kind === "group") &&
+    typeof source.label === "string" &&
+    typeof sender?.id === "string" &&
+    typeof sender.username === "string" &&
+    typeof sender.displayName === "string" &&
+    typeof sender.type === "string" &&
+    typeof source.eventId === "string" &&
+    typeof source.messageId === "string" &&
+    typeof source.messagePreview === "string" &&
+    typeof source.occurredAt === "number"
+  );
+}
+
+function parseRecentSourceState(raw: string, maxSources: number): RecentMingleSourceState {
+  try {
+    const value = JSON.parse(raw) as Partial<RecentMingleSourceState>;
+    if (value.version !== 1 || !Array.isArray(value.sources)) return { version: 1, sources: [] };
+    return {
+      version: 1,
+      sources: value.sources.filter(isRecentSource).slice(-maxSources),
+    };
+  } catch {
+    return { version: 1, sources: [] };
+  }
+}
+
+export class RecentMingleSourceStore {
+  private readonly path: string;
+  private readonly maxSources: number;
+  private mutationQueue: Promise<void> = Promise.resolve();
+
+  constructor(options: { accountId: string; stateDir?: string; maxSources?: number }) {
+    this.path = resolveRecentSourceStatePath(options.accountId, options.stateDir);
+    this.maxSources = options.maxSources ?? 10;
+  }
+
+  async list(limit = this.maxSources): Promise<RecentMingleSource[]> {
+    const state = await this.load();
+    return state.sources.slice(-Math.max(0, Math.min(limit, this.maxSources))).reverse();
+  }
+
+  async record(source: RecentMingleSource): Promise<void> {
+    const normalized = {
+      ...source,
+      messagePreview: source.messagePreview.slice(0, 500),
+    };
+    const operation = this.mutationQueue.then(async () => {
+      const state = await this.load();
+      const next = {
+        version: 1 as const,
+        sources: [...state.sources.filter((entry) => entry.target !== normalized.target), normalized]
+          .sort((left, right) => left.occurredAt - right.occurredAt)
+          .slice(-this.maxSources),
+      };
+      await this.writeAtomic(next);
+    });
+    this.mutationQueue = operation.catch(() => undefined);
+    await operation;
+  }
+
+  private async load(): Promise<RecentMingleSourceState> {
+    try {
+      return parseRecentSourceState(await readFile(this.path, "utf8"), this.maxSources);
+    } catch {
+      return { version: 1, sources: [] };
+    }
+  }
+
+  private async writeAtomic(state: RecentMingleSourceState): Promise<void> {
     const directory = dirname(this.path);
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const temporary = `${this.path}.${process.pid}.${randomUUID()}.tmp`;

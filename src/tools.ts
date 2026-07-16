@@ -4,6 +4,7 @@ import type { AnyAgentTool } from "openclaw/plugin-sdk/plugin-entry";
 import { jsonResult } from "openclaw/plugin-sdk/tool-results";
 import { MingleClient } from "./client.js";
 import { resolveMingleAccount } from "./config.js";
+import { RecentMingleSourceStore } from "./state.js";
 
 type MingleToolClient = Pick<
   MingleClient,
@@ -23,6 +24,7 @@ type MingleToolClient = Pick<
 type ToolParams = Record<string, unknown>;
 
 export const MINGLE_TOOL_NAMES = [
+  "mingle_recent_context",
   "mingle_send_dm",
   "mingle_read_conversation",
   "mingle_list_channels",
@@ -119,12 +121,24 @@ export function createMingleTools(params: {
   cfg: OpenClawConfig;
   accountId?: string;
   clientFactory?: (account: ReturnType<typeof resolveMingleAccount>) => MingleToolClient;
+  recentSources?: Pick<RecentMingleSourceStore, "list">;
 }): AnyAgentTool[] {
   const account = resolveMingleAccount(params.cfg, params.accountId);
   if (!account.enabled || !account.configured) return [];
   const client = params.clientFactory?.(account) ?? new MingleClient(account);
+  const recentSources =
+    params.recentSources ?? new RecentMingleSourceStore({ accountId: account.accountId });
 
   return [
+    tool(
+      "mingle_recent_context",
+      "Recent Mingle Context",
+      "List recent Mingle conversations seen by this Agent. Use when the owner refers from another channel to a recent Mingle message, person, or group such as 'reply to the previous group'.",
+      objectSchema({ limit: { type: "integer", minimum: 1, maximum: 10 } }),
+      async (input) => ({
+        sources: await recentSources.list(optionalInteger(input, "limit", { min: 1, max: 10 })),
+      }),
+    ),
     tool(
       "mingle_send_dm",
       "Send Mingle DM",

@@ -9,6 +9,7 @@
   "skills": ["./skills"],
   "contracts": {
     "tools": [
+      "mingle_recent_context",
       "mingle_send_dm",
       "mingle_read_conversation",
       "mingle_list_channels",

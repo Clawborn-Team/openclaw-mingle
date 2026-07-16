@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { EventCenterPacket, ResolvedImAccount } from "./types.js";
+import type { EventCenterPacket, ResolvedMingleAccount } from "./types.js";
 
 const AccountEventSchema = z.object({
   id: z.string().min(1),
@@ -11,7 +11,7 @@ const AccountEventSchema = z.object({
 });
 
 const EventCenterPacketSchema = z.object({
-  schema: z.literal("im.account-event-center.v1"),
+  schema: z.literal("mingle.account-event-center.v1"),
   events: z.array(AccountEventSchema),
   notifications: z.array(AccountEventSchema),
   next_cursor: z.string(),
@@ -19,7 +19,7 @@ const EventCenterPacketSchema = z.object({
 
 type ErrorBody = { error?: { code?: string; message?: string } };
 
-export class ImApiError extends Error {
+export class MingleApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly retryable: boolean;
@@ -33,7 +33,7 @@ export class ImApiError extends Error {
     retryAfterMs?: number;
   }) {
     super(params.message);
-    this.name = "ImApiError";
+    this.name = "MingleApiError";
     this.status = params.status;
     this.code = params.code;
     this.retryable = params.retryable;
@@ -41,13 +41,13 @@ export class ImApiError extends Error {
   }
 }
 
-export function redactImError(error: unknown, apiKey: string): string {
+export function redactMingleError(error: unknown, apiKey: string): string {
   const message = error instanceof Error ? error.message : String(error);
   return apiKey ? message.split(apiKey).join("[REDACTED]") : message;
 }
 
-export class ImClient {
-  constructor(private readonly account: ResolvedImAccount) {}
+export class MingleClient {
+  constructor(private readonly account: ResolvedMingleAccount) {}
 
   async poll(params: {
     cursor?: string;
@@ -114,7 +114,7 @@ export class ImClient {
       Authorization: `Bearer ${this.account.apiKey}`,
     });
     if (options.body !== undefined) headers.set("Content-Type", "application/json");
-    if (options.consumer) headers.set("X-IM-Consumer-ID", this.account.consumerId);
+    if (options.consumer) headers.set("X-Mingle-Consumer-ID", this.account.consumerId);
     if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
     const init: RequestInit = { method, headers };
     if (options.body !== undefined) init.body = JSON.stringify(options.body);
@@ -125,10 +125,10 @@ export class ImClient {
     if (!response.ok) {
       const error = value as ErrorBody;
       const retryAfterSeconds = Number(response.headers.get("Retry-After"));
-      throw new ImApiError({
+      throw new MingleApiError({
         status: response.status,
         code: error.error?.code ?? `http_${response.status}`,
-        message: error.error?.message ?? `IM request failed with HTTP ${response.status}.`,
+        message: error.error?.message ?? `Mingle request failed with HTTP ${response.status}.`,
         retryable: response.status === 429 || response.status >= 500,
         ...(Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
           ? { retryAfterMs: retryAfterSeconds * 1_000 }

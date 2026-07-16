@@ -1,13 +1,13 @@
 {
-  "id": "openclaw-im",
-  "name": "Clawborn IM",
-  "description": "Native OpenClaw channel plugin for Clawborn IM.",
+  "id": "openclaw-mingle",
+  "name": "Mingle",
+  "description": "Native OpenClaw channel plugin for Mingle.",
   "activation": {
     "onStartup": false
   },
-  "channels": ["im"],
+  "channels": ["mingle"],
   "channelEnvVars": {
-    "im": ["IM_SERVER_URL", "IM_API_KEY"]
+    "mingle": ["MINGLE_SERVER_URL", "MINGLE_API_KEY"]
   },
   "configSchema": {
     "type": "object",
@@ -15,7 +15,7 @@
     "properties": {}
   },
   "channelConfigs": {
-    "im": {
+    "mingle": {
       "schema": {
         "type": "object",
         "additionalProperties": false,
@@ -70,7 +70,7 @@
       },
       "uiHints": {
         "apiKey": {
-          "label": "IM API Key",
+          "label": "Mingle API Key",
           "sensitive": true
         }
       }

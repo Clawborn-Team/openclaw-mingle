@@ -1,25 +1,25 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { imPlugin } from "../src/channel.js";
+import { minglePlugin } from "../src/channel.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("native IM channel", () => {
+describe("native Mingle channel", () => {
   it("aligns channel identity, manifest, direct-only capabilities, and account inspection", async () => {
     const manifest = JSON.parse(
       await readFile(resolve("openclaw.plugin.json"), "utf8"),
     ) as { channels: string[] };
     const cfg = {
-      channels: { im: { baseUrl: "https://im.example", apiKey: "secret" } },
+      channels: { mingle: { baseUrl: "https://im.example", apiKey: "secret" } },
     } as never;
 
-    expect(manifest.channels).toEqual(["im"]);
-    expect(imPlugin.id).toBe("im");
-    expect(imPlugin.meta).toMatchObject({ id: "im", label: "Clawborn IM" });
-    expect(imPlugin.capabilities).toMatchObject({ chatTypes: ["direct"], media: false });
-    expect(imPlugin.config.listAccountIds(cfg)).toEqual(["default"]);
-    expect(imPlugin.config.inspectAccount?.(cfg, "default")).toMatchObject({
+    expect(manifest.channels).toEqual(["mingle"]);
+    expect(minglePlugin.id).toBe("mingle");
+    expect(minglePlugin.meta).toMatchObject({ id: "mingle", label: "Mingle" });
+    expect(minglePlugin.capabilities).toMatchObject({ chatTypes: ["direct"], media: false });
+    expect(minglePlugin.config.listAccountIds(cfg)).toEqual(["default"]);
+    expect(minglePlugin.config.inspectAccount?.(cfg, "default")).toMatchObject({
       enabled: true,
       configured: true,
       tokenStatus: "available",
@@ -32,30 +32,30 @@ describe("native IM channel", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     const cfg = {
-      channels: { im: { baseUrl: "https://im.example", apiKey: "secret" } },
+      channels: { mingle: { baseUrl: "https://im.example", apiKey: "secret" } },
     } as never;
 
-    expect(imPlugin.messaging?.normalizeTarget?.("im:peer-1")).toBe("peer-1");
-    const result = await imPlugin.outbound?.sendText?.({
+    expect(minglePlugin.messaging?.normalizeTarget?.("mingle:peer-1")).toBe("peer-1");
+    const result = await minglePlugin.outbound?.sendText?.({
       cfg,
       accountId: "default",
-      to: "im:peer-1",
+      to: "mingle:peer-1",
       text: "hello",
     } as never);
 
-    expect(result).toMatchObject({ channel: "im", messageId: "msg-1", chatId: "peer-1" });
+    expect(result).toMatchObject({ channel: "mingle", messageId: "msg-1", chatId: "peer-1" });
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(String(url)).toBe("https://im.example/v1/messages");
     expect(JSON.parse(String(init?.body))).toEqual({ to: "peer-1", body: "hello" });
-    expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^im-send:/);
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^mingle-send:/);
   });
 
   it("fails fast when the runtime is missing or the account is unconfigured", async () => {
-    const gateway = imPlugin.gateway?.startAccount;
+    const gateway = minglePlugin.gateway?.startAccount;
     expect(gateway).toBeDefined();
     await expect(
       gateway?.({
-        cfg: { channels: { im: { apiKey: "secret" } } },
+        cfg: { channels: { mingle: { apiKey: "secret" } } },
         account: {
           accountId: "default",
           enabled: true,
@@ -72,7 +72,7 @@ describe("native IM channel", () => {
 
     await expect(
       gateway?.({
-        cfg: { channels: { im: {} } },
+        cfg: { channels: { mingle: {} } },
         account: {
           accountId: "default",
           enabled: true,
@@ -92,8 +92,8 @@ describe("native IM channel", () => {
     const controller = new AbortController();
     controller.abort();
     const setStatus = vi.fn();
-    await imPlugin.gateway?.startAccount?.({
-      cfg: { channels: { im: { baseUrl: "https://im.example", apiKey: "secret" } } },
+    await minglePlugin.gateway?.startAccount?.({
+      cfg: { channels: { mingle: { baseUrl: "https://im.example", apiKey: "secret" } } },
       account: {
         accountId: "default",
         enabled: true,

@@ -1,8 +1,8 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ImClient } from "../dist/src/client.js";
-import { monitorImAccount } from "../dist/src/monitor.js";
+import { MingleClient } from "../dist/src/client.js";
+import { monitorMingleAccount } from "../dist/src/monitor.js";
 import { DeliveryStateStore } from "../dist/src/state.js";
 
 const BASE = (process.env.BASE || "http://localhost:8787").replace(/\/+$/, "");
@@ -63,9 +63,9 @@ async function main() {
     apiKey: agent.api_key,
     consumerId: `plugin-smoke-${suffix}`,
   };
-  const realClient = new ImClient(account);
+  const realClient = new MingleClient(account);
   const controller = new AbortController();
-  const stateDir = await mkdtemp(join(tmpdir(), "openclaw-im-integration-"));
+  const stateDir = await mkdtemp(join(tmpdir(), "openclaw-mingle-integration-"));
   const state = new DeliveryStateStore({ accountId: "default", stateDir });
   let turns = 0;
 
@@ -73,7 +73,7 @@ async function main() {
     routing: {
       resolveAgentRoute: () => ({
         agentId: "main",
-        sessionKey: `agent:main:im:direct:${bob.account.id}`,
+        sessionKey: `agent:main:mingle:direct:${bob.account.id}`,
         mainSessionKey: "agent:main:main",
       }),
     },
@@ -104,7 +104,7 @@ async function main() {
   };
 
   console.log("3) Event Center dispatches through the OpenClaw inbound lifecycle and ACKs");
-  await monitorImAccount({
+  await monitorMingleAccount({
     cfg: {},
     account,
     channelRuntime,
@@ -130,7 +130,7 @@ async function main() {
   check("ACKed event is absent after restart", afterAck.events.length === 0, afterAck);
   check("no duplicate turn ran", turns === 1, { turns });
 
-  console.log("OPENCLAW IM INTEGRATION SMOKE PASSED ✅");
+  console.log("OPENCLAW MINGLE INTEGRATION SMOKE PASSED ✅");
 }
 
 main().catch((error) => {

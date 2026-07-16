@@ -1,15 +1,15 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
-import { ImApiError, type ImClient } from "./client.js";
+import { MingleApiError, type MingleClient } from "./client.js";
 import {
-  dispatchImEvent,
-  type DispatchImEventParams,
-  type ImChannelRuntime,
+  dispatchMingleEvent,
+  type DispatchMingleEventParams,
+  type MingleChannelRuntime,
 } from "./inbound.js";
-import { MalformedImEventError, UnsupportedImEventError } from "./packet.js";
+import { MalformedMingleEventError, UnsupportedMingleEventError } from "./packet.js";
 import type { DeliveryStateStore } from "./state.js";
-import type { ResolvedImAccount } from "./types.js";
+import type { ResolvedMingleAccount } from "./types.js";
 
-export type ImMonitorState =
+export type MingleMonitorState =
   | "starting"
   | "connected"
   | "reconnecting"
@@ -17,13 +17,13 @@ export type ImMonitorState =
   | "consumer_conflict"
   | "stopped";
 
-export type ImMonitorStatus = {
-  state: ImMonitorState;
+export type MingleMonitorStatus = {
+  state: MingleMonitorState;
   errorCode?: string;
   lastEventAt?: number;
 };
 
-type MonitorClient = Pick<ImClient, "poll" | "ack" | "nack" | "sendDm">;
+type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm">;
 
 function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve();
@@ -41,24 +41,24 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 function nackReason(error: unknown): string {
-  if (error instanceof UnsupportedImEventError) return "unsupported_event_type";
-  if (error instanceof MalformedImEventError) return "malformed_event_payload";
+  if (error instanceof UnsupportedMingleEventError) return "unsupported_event_type";
+  if (error instanceof MalformedMingleEventError) return "malformed_event_payload";
   return "openclaw_dispatch_failed";
 }
 
-export async function monitorImAccount(options: {
+export async function monitorMingleAccount(options: {
   cfg: OpenClawConfig;
-  account: ResolvedImAccount;
-  channelRuntime: ImChannelRuntime;
+  account: ResolvedMingleAccount;
+  channelRuntime: MingleChannelRuntime;
   client: MonitorClient;
   state: DeliveryStateStore;
   abortSignal: AbortSignal;
-  setStatus?: (status: ImMonitorStatus) => void;
-  dispatch?: (params: DispatchImEventParams) => Promise<void>;
+  setStatus?: (status: MingleMonitorStatus) => void;
+  dispatch?: (params: DispatchMingleEventParams) => Promise<void>;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   random?: () => number;
 }): Promise<void> {
-  const dispatch = options.dispatch ?? dispatchImEvent;
+  const dispatch = options.dispatch ?? dispatchMingleEvent;
   const sleep = options.sleep ?? abortableSleep;
   const random = options.random ?? Math.random;
   let cursor = (await options.state.load()).cursor;
@@ -120,7 +120,7 @@ export async function monitorImAccount(options: {
       }
     } catch (error) {
       if (options.abortSignal.aborted) break;
-      if (error instanceof ImApiError) {
+      if (error instanceof MingleApiError) {
         if (error.status === 401 || error.status === 403) {
           options.setStatus?.({ state: "authentication_failed", errorCode: error.code });
           return;
@@ -133,9 +133,9 @@ export async function monitorImAccount(options: {
 
       options.setStatus?.({
         state: "reconnecting",
-        errorCode: error instanceof ImApiError ? error.code : "network_error",
+        errorCode: error instanceof MingleApiError ? error.code : "network_error",
       });
-      const retryAfter = error instanceof ImApiError ? error.retryAfterMs : undefined;
+      const retryAfter = error instanceof MingleApiError ? error.retryAfterMs : undefined;
       const baseDelay = retryAfter ?? Math.min(60_000, 1_000 * 2 ** retryAttempt);
       if (retryAfter === undefined) retryAttempt += 1;
       const jitter = retryAfter === undefined ? Math.floor(baseDelay * 0.2 * random()) : 0;

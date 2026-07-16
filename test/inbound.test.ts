@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { dispatchImEvent } from "../src/inbound.js";
-import type { AccountEvent, ResolvedImAccount } from "../src/types.js";
+import { dispatchMingleEvent } from "../src/inbound.js";
+import type { AccountEvent, ResolvedMingleAccount } from "../src/types.js";
 
-const account: ResolvedImAccount = {
+const account: ResolvedMingleAccount = {
   accountId: "default",
   enabled: true,
   configured: true,
   baseUrl: "https://im.example",
   apiKey: "secret",
-  consumerId: "openclaw-im-default",
+  consumerId: "openclaw-mingle-default",
 };
 
 const event: AccountEvent = {
@@ -30,7 +30,7 @@ function runtimeThatDelivers(texts: Array<string | undefined>) {
     routing: {
       resolveAgentRoute: vi.fn(() => ({
         agentId: "main",
-        sessionKey: "agent:main:im:direct:acc-b",
+        sessionKey: "agent:main:mingle:direct:acc-b",
         mainSessionKey: "agent:main:main",
       })),
     },
@@ -56,12 +56,12 @@ function runtimeThatDelivers(texts: Array<string | undefined>) {
   return { runtime, capture };
 }
 
-describe("dispatchImEvent", () => {
+describe("dispatchMingleEvent", () => {
   it("routes a DM to a stable direct session and sends replies with stable idempotency keys", async () => {
     const { runtime, capture } = runtimeThatDelivers(["first", "second"]);
     const sendDm = vi.fn(async () => ({ id: "reply-1" }));
 
-    await dispatchImEvent({
+    await dispatchMingleEvent({
       cfg: { session: {} } as never,
       account,
       event,
@@ -72,31 +72,31 @@ describe("dispatchImEvent", () => {
 
     expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
       cfg: { session: {} },
-      channel: "im",
+      channel: "mingle",
       accountId: "default",
       peer: { kind: "direct", id: "acc-b" },
     });
     expect(capture.context).toMatchObject({
-      channel: "im",
-      from: "im:acc-b",
+      channel: "mingle",
+      from: "mingle:acc-b",
       conversation: { kind: "direct", id: "acc-b", label: "bob" },
       route: {
         agentId: "main",
-        routeSessionKey: "agent:main:im:direct:acc-b",
-        dispatchSessionKey: "agent:main:im:direct:acc-b",
+        routeSessionKey: "agent:main:mingle:direct:acc-b",
+        dispatchSessionKey: "agent:main:mingle:direct:acc-b",
       },
-      reply: { to: "im:acc-b" },
-      extra: { ImEventId: "evt-1", ImMessageId: "msg-1" },
+      reply: { to: "mingle:acc-b" },
+      extra: { MingleEventId: "evt-1", MingleMessageId: "msg-1" },
     });
-    expect(sendDm).toHaveBeenNthCalledWith(1, "acc-b", "first", "im-reply:evt-1:0");
-    expect(sendDm).toHaveBeenNthCalledWith(2, "acc-b", "second", "im-reply:evt-1:1");
+    expect(sendDm).toHaveBeenNthCalledWith(1, "acc-b", "first", "mingle-reply:evt-1:0");
+    expect(sendDm).toHaveBeenNthCalledWith(2, "acc-b", "second", "mingle-reply:evt-1:1");
   });
 
-  it("accepts a no-text final without creating a visible IM message", async () => {
+  it("accepts a no-text final without creating a visible Mingle message", async () => {
     const { runtime } = runtimeThatDelivers([undefined, ""]);
     const sendDm = vi.fn();
 
-    await dispatchImEvent({
+    await dispatchMingleEvent({
       cfg: {} as never,
       account,
       event,

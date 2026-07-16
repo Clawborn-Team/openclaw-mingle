@@ -16,7 +16,7 @@ function defaultStateDir(): string {
 }
 
 export function resolveDeliveryStatePath(accountId: string, stateDir = defaultStateDir()): string {
-  return join(stateDir, "openclaw-im", `${encodeURIComponent(accountId)}.json`);
+  return join(stateDir, "openclaw-mingle", `${encodeURIComponent(accountId)}.json`);
 }
 
 function parseState(raw: string, maxAccepted: number): DeliveryState {

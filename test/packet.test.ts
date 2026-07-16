@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MalformedImEventError, UnsupportedImEventError, normalizeImEvent } from "../src/packet.js";
+import { MalformedMingleEventError, UnsupportedMingleEventError, normalizeMingleEvent } from "../src/packet.js";
 import type { AccountEvent } from "../src/types.js";
 
 function dmEvent(overrides: Partial<AccountEvent> = {}): AccountEvent {
@@ -18,12 +18,12 @@ function dmEvent(overrides: Partial<AccountEvent> = {}): AccountEvent {
   };
 }
 
-describe("normalizeImEvent", () => {
+describe("normalizeMingleEvent", () => {
   it("builds a versioned direct-message packet and keeps external text as data", () => {
-    const result = normalizeImEvent(dmEvent(), []);
+    const result = normalizeMingleEvent(dmEvent(), []);
 
     expect(result.packet).toEqual({
-      schema: "im.account-event.v1",
+      schema: "mingle.account-event.v1",
       trigger: {
         id: "evt-1",
         type: "dm.message.created",
@@ -35,7 +35,7 @@ describe("normalizeImEvent", () => {
       notifications: [],
     });
     expect(result.bodyForAgent).toContain("UNTRUSTED EXTERNAL DATA");
-    expect(result.bodyForAgent).toContain('"schema":"im.account-event.v1"');
+    expect(result.bodyForAgent).toContain('"schema":"mingle.account-event.v1"');
     expect(result.peerId).toBe("acc-b");
   });
 
@@ -48,7 +48,7 @@ describe("normalizeImEvent", () => {
       payload: { summary: "New message in Product", channel_id: "ch-1" },
     });
 
-    expect(normalizeImEvent(dmEvent(), [notification]).packet.notifications).toEqual([
+    expect(normalizeMingleEvent(dmEvent(), [notification]).packet.notifications).toEqual([
       {
         id: "ntf-1",
         type: "channel.activity",
@@ -59,11 +59,11 @@ describe("normalizeImEvent", () => {
   });
 
   it("rejects unknown wake types and malformed DM payloads explicitly", () => {
-    expect(() => normalizeImEvent(dmEvent({ type: "future.event" }), [])).toThrow(
-      UnsupportedImEventError,
+    expect(() => normalizeMingleEvent(dmEvent({ type: "future.event" }), [])).toThrow(
+      UnsupportedMingleEventError,
     );
-    expect(() => normalizeImEvent(dmEvent({ payload: { message: {} } }), [])).toThrow(
-      MalformedImEventError,
+    expect(() => normalizeMingleEvent(dmEvent({ payload: { message: {} } }), [])).toThrow(
+      MalformedMingleEventError,
     );
   });
 });

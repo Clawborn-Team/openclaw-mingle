@@ -2,19 +2,19 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ImApiError } from "../src/client.js";
-import type { DispatchImEventParams } from "../src/inbound.js";
-import { monitorImAccount } from "../src/monitor.js";
+import { MingleApiError } from "../src/client.js";
+import type { DispatchMingleEventParams } from "../src/inbound.js";
+import { monitorMingleAccount } from "../src/monitor.js";
 import { DeliveryStateStore } from "../src/state.js";
-import type { AccountEvent, EventCenterPacket, ResolvedImAccount } from "../src/types.js";
+import type { AccountEvent, EventCenterPacket, ResolvedMingleAccount } from "../src/types.js";
 
-const account: ResolvedImAccount = {
+const account: ResolvedMingleAccount = {
   accountId: "default",
   enabled: true,
   configured: true,
   baseUrl: "https://im.example",
   apiKey: "secret",
-  consumerId: "openclaw-im-default",
+  consumerId: "openclaw-mingle-default",
 };
 
 const event = (id: string): AccountEvent => ({
@@ -35,14 +35,14 @@ const packet = (
   notifications: AccountEvent[] = [],
   cursor = "cursor-1",
 ): EventCenterPacket => ({
-  schema: "im.account-event-center.v1",
+  schema: "mingle.account-event-center.v1",
   events,
   notifications,
   next_cursor: cursor,
 });
 
 function apiError(status: number, code: string, retryAfterMs?: number) {
-  return new ImApiError({
+  return new MingleApiError({
     status,
     code,
     message: code,
@@ -51,7 +51,7 @@ function apiError(status: number, code: string, retryAfterMs?: number) {
   });
 }
 
-describe("monitorImAccount", () => {
+describe("monitorMingleAccount", () => {
   let state: DeliveryStateStore;
   let stateDir: string;
   let controller: AbortController;
@@ -80,9 +80,9 @@ describe("monitorImAccount", () => {
       nack: vi.fn(async () => undefined),
       sendDm: vi.fn(),
     };
-    const dispatch = vi.fn(async (_params: DispatchImEventParams) => undefined);
+    const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => undefined);
 
-    await monitorImAccount({
+    await monitorMingleAccount({
       cfg: {} as never,
       account,
       channelRuntime: {} as never,
@@ -115,7 +115,7 @@ describe("monitorImAccount", () => {
     };
     const dispatch = vi.fn();
 
-    await monitorImAccount({
+    await monitorMingleAccount({
       cfg: {} as never,
       account,
       channelRuntime: {} as never,
@@ -148,9 +148,9 @@ describe("monitorImAccount", () => {
       nack: vi.fn(async () => undefined),
       sendDm: vi.fn(),
     };
-    const dispatch = vi.fn(async (_params: DispatchImEventParams) => undefined);
+    const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => undefined);
 
-    await monitorImAccount({
+    await monitorMingleAccount({
       cfg: {} as never,
       account,
       channelRuntime: {} as never,
@@ -182,11 +182,11 @@ describe("monitorImAccount", () => {
       sendDm: vi.fn(),
     };
     let dispatchCount = 0;
-    const dispatch = vi.fn(async (_params: DispatchImEventParams) => {
+    const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => {
       if (dispatchCount++ === 0) throw new Error("runtime exploded");
     });
 
-    await monitorImAccount({
+    await monitorMingleAccount({
       cfg: {} as never,
       account,
       channelRuntime: {} as never,
@@ -216,7 +216,7 @@ describe("monitorImAccount", () => {
     };
     const statuses: string[] = [];
 
-    await monitorImAccount({
+    await monitorMingleAccount({
       cfg: {} as never,
       account,
       channelRuntime: {} as never,
@@ -247,7 +247,7 @@ describe("monitorImAccount", () => {
       sendDm: vi.fn(),
     };
 
-    await monitorImAccount({
+    await monitorMingleAccount({
       cfg: {} as never,
       account,
       channelRuntime: {} as never,

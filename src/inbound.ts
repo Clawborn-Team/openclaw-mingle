@@ -1,27 +1,27 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { PluginRuntime } from "openclaw/plugin-sdk/plugin-runtime";
-import type { ImClient } from "./client.js";
-import { normalizeImEvent } from "./packet.js";
-import type { AccountEvent, ResolvedImAccount } from "./types.js";
+import type { MingleClient } from "./client.js";
+import { normalizeMingleEvent } from "./packet.js";
+import type { AccountEvent, ResolvedMingleAccount } from "./types.js";
 
-const CHANNEL_ID = "im";
+const CHANNEL_ID = "mingle";
 
-export type ImChannelRuntime = Pick<
+export type MingleChannelRuntime = Pick<
   PluginRuntime["channel"],
   "inbound" | "reply" | "routing" | "session"
 >;
 
-export type DispatchImEventParams = {
+export type DispatchMingleEventParams = {
   cfg: OpenClawConfig;
-  account: ResolvedImAccount;
+  account: ResolvedMingleAccount;
   event: AccountEvent;
   notifications: AccountEvent[];
-  channelRuntime: ImChannelRuntime;
-  client: Pick<ImClient, "sendDm">;
+  channelRuntime: MingleChannelRuntime;
+  client: Pick<MingleClient, "sendDm">;
 };
 
-export async function dispatchImEvent(params: DispatchImEventParams): Promise<void> {
-  const normalized = normalizeImEvent(params.event, params.notifications);
+export async function dispatchMingleEvent(params: DispatchMingleEventParams): Promise<void> {
+  const normalized = normalizeMingleEvent(params.event, params.notifications);
   const route = params.channelRuntime.routing.resolveAgentRoute({
     cfg: params.cfg,
     channel: CHANNEL_ID,
@@ -49,7 +49,7 @@ export async function dispatchImEvent(params: DispatchImEventParams): Promise<vo
           channel: CHANNEL_ID,
           accountId: params.account.accountId,
           timestamp: input.timestamp ?? params.event.occurred_at,
-          from: `im:${normalized.peerId}`,
+          from: `mingle:${normalized.peerId}`,
           sender: {
             id: normalized.packet.trigger.sender.id,
             name:
@@ -68,15 +68,15 @@ export async function dispatchImEvent(params: DispatchImEventParams): Promise<vo
             routeSessionKey: sessionKey,
             dispatchSessionKey: sessionKey,
           },
-          reply: { to: `im:${normalized.peerId}` },
+          reply: { to: `mingle:${normalized.peerId}` },
           message: {
             rawBody: input.rawText,
             commandBody: input.textForCommands ?? "",
             bodyForAgent: input.textForAgent ?? normalized.bodyForAgent,
           },
           extra: {
-            ImEventId: params.event.id,
-            ImMessageId: normalized.packet.trigger.message.id,
+            MingleEventId: params.event.id,
+            MingleMessageId: normalized.packet.trigger.message.id,
           },
         });
         const storePath = params.channelRuntime.session.resolveStorePath(
@@ -103,7 +103,7 @@ export async function dispatchImEvent(params: DispatchImEventParams): Promise<vo
               await params.client.sendDm(
                 normalized.peerId,
                 text,
-                `im-reply:${params.event.id}:${index}`,
+                `mingle-reply:${params.event.id}:${index}`,
               );
               return { visibleReplySent: true };
             },

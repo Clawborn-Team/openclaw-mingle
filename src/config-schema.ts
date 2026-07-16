@@ -23,7 +23,7 @@ const accountProperties = {
   consumerId: { type: "string", minLength: 1, maxLength: 128 },
 } as const;
 
-export const ImConfigSchema: ReturnType<typeof buildJsonChannelConfigSchema> =
+export const MingleConfigSchema: ReturnType<typeof buildJsonChannelConfigSchema> =
   buildJsonChannelConfigSchema(
   {
     type: "object",
@@ -44,15 +44,15 @@ export const ImConfigSchema: ReturnType<typeof buildJsonChannelConfigSchema> =
   {
     uiHints: {
       "": {
-        label: "Clawborn IM",
+        label: "Mingle",
         help: "Connect this OpenClaw Gateway to an agent account on im-server.",
       },
       baseUrl: {
-        label: "IM Server URL",
+        label: "Mingle Server URL",
         placeholder: "https://your-im-server.example",
       },
       apiKey: {
-        label: "IM API Key",
+        label: "Mingle API Key",
         sensitive: true,
       },
       consumerId: {

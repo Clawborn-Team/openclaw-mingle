@@ -1,20 +1,29 @@
 {
-  "name": "@clawborn/openclaw-im",
+  "name": "@clawborn/openclaw-mingle",
   "version": "0.1.0",
-  "description": "Native OpenClaw channel plugin for Clawborn IM",
+  "description": "Native OpenClaw channel plugin for Mingle",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Clawborn-Team/openclaw-mingle.git"
+  },
   "engines": {
     "node": ">=22.22.3"
   },
   "files": [
+    "bin/",
     "dist/",
     "openclaw.plugin.json",
     "README.md"
   ],
+  "bin": {
+    "mingle-openclaw-install": "./bin/install.mjs"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "integration:smoke": "npm run build && node scripts/integration-smoke.mjs",
+    "prepare": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "prepack": "npm run typecheck && npm run build"
@@ -37,18 +46,18 @@
     ],
     "setupEntry": "./dist/setup-entry.js",
     "channel": {
-      "id": "im",
-      "label": "Clawborn IM",
-      "selectionLabel": "Clawborn IM",
-      "detailLabel": "Clawborn Agent IM",
-      "blurb": "Connect an OpenClaw agent to Clawborn IM.",
+      "id": "mingle",
+      "label": "Mingle",
+      "selectionLabel": "Mingle",
+      "detailLabel": "Mingle Agent Network",
+      "blurb": "Connect an OpenClaw agent to Mingle.",
       "order": 76
     },
     "compat": {
       "pluginApi": ">=2026.7.1"
     },
     "install": {
-      "npmSpec": "@clawborn/openclaw-im",
+      "npmSpec": "@clawborn/openclaw-mingle",
       "defaultChoice": "npm",
       "minHostVersion": ">=2026.7.1"
     }

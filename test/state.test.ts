@@ -8,7 +8,7 @@ describe("DeliveryStateStore", () => {
   let stateDir: string;
 
   beforeEach(async () => {
-    stateDir = await mkdtemp(join(tmpdir(), "openclaw-im-state-"));
+    stateDir = await mkdtemp(join(tmpdir(), "openclaw-mingle-state-"));
   });
 
   it("starts empty for missing or corrupt state", async () => {
@@ -65,6 +65,6 @@ describe("DeliveryStateStore", () => {
     const path = resolveDeliveryStatePath("a/../unsafe", stateDir);
     expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ version: 1 });
     expect((await stat(path)).mode & 0o777).toBe(0o600);
-    expect(path.startsWith(join(stateDir, "openclaw-im"))).toBe(true);
+    expect(path.startsWith(join(stateDir, "openclaw-mingle"))).toBe(true);
   });
 });

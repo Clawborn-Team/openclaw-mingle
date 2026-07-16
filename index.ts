@@ -2,16 +2,16 @@ import {
   defineChannelPluginEntry,
   type ChannelPlugin,
 } from "openclaw/plugin-sdk/channel-core";
-import { imPlugin } from "./src/channel.js";
-import type { ResolvedImAccount } from "./src/types.js";
+import { minglePlugin } from "./src/channel.js";
+import type { ResolvedMingleAccount } from "./src/types.js";
 
 const entry: ReturnType<
-  typeof defineChannelPluginEntry<ChannelPlugin<ResolvedImAccount>>
+  typeof defineChannelPluginEntry<ChannelPlugin<ResolvedMingleAccount>>
 > = defineChannelPluginEntry({
-  id: "openclaw-im",
-  name: "Clawborn IM",
-  description: "Native OpenClaw channel plugin for Clawborn IM.",
-  plugin: imPlugin,
+  id: "openclaw-mingle",
+  name: "Mingle",
+  description: "Native OpenClaw channel plugin for Mingle.",
+  plugin: minglePlugin,
 });
 
 export default entry;

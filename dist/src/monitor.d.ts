@@ -1,7 +1,7 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { type MingleClient } from "./client.js";
 import { type DispatchMingleEventParams, type MingleChannelRuntime } from "./inbound.js";
-import type { DeliveryStateStore } from "./state.js";
+import { RecentMingleSourceStore, type DeliveryStateStore } from "./state.js";
 import type { ResolvedMingleAccount } from "./types.js";
 export type MingleMonitorState = "starting" | "connected" | "reconnecting" | "authentication_failed" | "consumer_conflict" | "stopped";
 export type MingleMonitorStatus = {
@@ -23,5 +23,6 @@ export declare function monitorMingleAccount(options: {
     random?: () => number;
     now?: () => number;
     digestIntervalMs?: number;
+    recentSources?: RecentMingleSourceStore;
 }): Promise<void>;
 export {};

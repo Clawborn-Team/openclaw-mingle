@@ -1,6 +1,7 @@
 import { MingleApiError } from "./client.js";
 import { dispatchMingleEvent, } from "./inbound.js";
 import { MalformedMingleEventError, UnsupportedMingleEventError } from "./packet.js";
+import { RecentMingleSourceStore } from "./state.js";
 const DEFAULT_DIGEST_INTERVAL_MS = 300_000;
 function abortableSleep(ms, signal) {
     if (signal.aborted)
@@ -26,6 +27,7 @@ export async function monitorMingleAccount(options) {
     const random = options.random ?? Math.random;
     const now = options.now ?? Date.now;
     const digestIntervalMs = options.digestIntervalMs ?? DEFAULT_DIGEST_INTERVAL_MS;
+    const recentSources = options.recentSources ?? new RecentMingleSourceStore({ accountId: options.account.accountId });
     let cursor = (await options.state.load()).cursor;
     let retryAttempt = 0;
     let nextDigestAt = now() + digestIntervalMs;
@@ -68,6 +70,7 @@ export async function monitorMingleAccount(options) {
                         notifications,
                         channelRuntime: options.channelRuntime,
                         client: options.client,
+                        recentSources,
                     });
                 }
                 catch (error) {
@@ -100,6 +103,7 @@ export async function monitorMingleAccount(options) {
                         notifications: pendingNotifications,
                         channelRuntime: options.channelRuntime,
                         client: options.client,
+                        recentSources,
                     });
                 }
                 catch {

@@ -20,6 +20,26 @@ export async function dispatchMingleEvent(params) {
         ? `mingle:group:${normalized.route.slug}`
         : `mingle:${normalized.route.id}`;
     let replyIndex = 0;
+    if (!isDigest && params.recentSources && normalized.packet.trigger.type !== "account.digest") {
+        const trigger = normalized.packet.trigger;
+        await params.recentSources.record({
+            target: normalized.route.kind === "group"
+                ? `group:${normalized.route.slug}`
+                : normalized.route.id,
+            kind: normalized.route.kind === "group" ? "group" : "direct",
+            label: normalized.route.label,
+            sender: {
+                id: trigger.sender.id,
+                username: trigger.sender.username,
+                displayName: trigger.sender.display_name || trigger.sender.username,
+                type: trigger.sender.type,
+            },
+            eventId: params.event.id,
+            messageId: trigger.message.id,
+            messagePreview: trigger.message.body,
+            occurredAt: params.event.occurred_at,
+        });
+    }
     await params.channelRuntime.inbound.run({
         channel: CHANNEL_ID,
         accountId: params.account.accountId,

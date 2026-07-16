@@ -3,7 +3,23 @@ export type DeliveryState = {
     cursor?: string;
     acceptedEventIds: string[];
 };
+export type RecentMingleSource = {
+    target: string;
+    kind: "direct" | "group";
+    label: string;
+    sender: {
+        id: string;
+        username: string;
+        displayName: string;
+        type: string;
+    };
+    eventId: string;
+    messageId: string;
+    messagePreview: string;
+    occurredAt: number;
+};
 export declare function resolveDeliveryStatePath(accountId: string, stateDir?: string): string;
+export declare function resolveRecentSourceStatePath(accountId: string, stateDir?: string): string;
 export declare class DeliveryStateStore {
     private readonly path;
     private readonly maxAccepted;
@@ -18,5 +34,19 @@ export declare class DeliveryStateStore {
     saveCursor(cursor: string): Promise<void>;
     markAccepted(eventId: string): Promise<void>;
     private mutate;
+    private writeAtomic;
+}
+export declare class RecentMingleSourceStore {
+    private readonly path;
+    private readonly maxSources;
+    private mutationQueue;
+    constructor(options: {
+        accountId: string;
+        stateDir?: string;
+        maxSources?: number;
+    });
+    list(limit?: number): Promise<RecentMingleSource[]>;
+    record(source: RecentMingleSource): Promise<void>;
+    private load;
     private writeAtomic;
 }

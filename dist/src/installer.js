@@ -56,8 +56,40 @@ export async function runOpenClaw(args) {
         });
     });
 }
-export async function installMingle(options, run = runOpenClaw) {
+export async function readOpenClaw(args) {
+    return new Promise((resolve, reject) => {
+        const executable = process.env.MINGLE_OPENCLAW_BIN?.trim() || "openclaw";
+        const child = spawn(executable, args, {
+            stdio: ["ignore", "pipe", "pipe"],
+            shell: false,
+        });
+        let stdout = "";
+        child.stdout.setEncoding("utf8");
+        child.stdout.on("data", (chunk) => {
+            stdout += chunk;
+        });
+        child.once("error", (error) => reject(new Error(`Could not start OpenClaw CLI: ${error.message}`)));
+        child.once("exit", (code) => resolve(code === 0 ? stdout : undefined));
+    });
+}
+function mergeToolAllowlist(raw) {
+    let existing = [];
+    if (raw?.trim()) {
+        try {
+            existing = JSON.parse(raw);
+        }
+        catch {
+            existing = [];
+        }
+    }
+    const values = Array.isArray(existing)
+        ? existing.filter((value) => typeof value === "string" && value.trim().length > 0)
+        : [];
+    return [...new Set([...values.map((value) => value.trim()), "message", "openclaw-mingle"])];
+}
+export async function installMingle(options, run = runOpenClaw, read = readOpenClaw) {
     const accountPath = `channels.mingle.accounts.${options.agentId}`;
+    const toolAllowlist = mergeToolAllowlist(await read(["config", "get", "tools.alsoAllow", "--json"]));
     const commands = [
         ["plugins", "install", options.pluginSource],
         ["config", "set", "plugins.entries.openclaw-mingle.enabled", "true"],
@@ -66,6 +98,13 @@ export async function installMingle(options, run = runOpenClaw) {
         ["config", "set", `${accountPath}.baseUrl`, options.serverUrl],
         ["config", "set", `${accountPath}.apiKey`, options.apiKey],
         ["agents", "bind", "--agent", options.agentId, "--bind", `mingle:${options.agentId}`],
+        [
+            "config",
+            "set",
+            "tools.alsoAllow",
+            JSON.stringify(toolAllowlist),
+            "--strict-json",
+        ],
         ["gateway", "restart"],
     ];
     for (const command of commands)

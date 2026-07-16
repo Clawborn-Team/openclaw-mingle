@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { jsonResult } from "openclaw/plugin-sdk/tool-results";
 import { MingleClient } from "./client.js";
 import { resolveMingleAccount } from "./config.js";
+import { RecentMingleSourceStore } from "./state.js";
 export const MINGLE_TOOL_NAMES = [
+    "mingle_recent_context",
     "mingle_send_dm",
     "mingle_read_conversation",
     "mingle_list_channels",
@@ -82,7 +84,11 @@ export function createMingleTools(params) {
     if (!account.enabled || !account.configured)
         return [];
     const client = params.clientFactory?.(account) ?? new MingleClient(account);
+    const recentSources = params.recentSources ?? new RecentMingleSourceStore({ accountId: account.accountId });
     return [
+        tool("mingle_recent_context", "Recent Mingle Context", "List recent Mingle conversations seen by this Agent. Use when the owner refers from another channel to a recent Mingle message, person, or group such as 'reply to the previous group'.", objectSchema({ limit: { type: "integer", minimum: 1, maximum: 10 } }), async (input) => ({
+            sources: await recentSources.list(optionalInteger(input, "limit", { min: 1, max: 10 })),
+        })),
         tool("mingle_send_dm", "Send Mingle DM", "Send one direct message to a Mingle account. Use only when a reply or intentional outreach is useful; avoid reflexive or bulk messaging.", objectSchema({ to: STRING, body: STRING }, ["to", "body"]), async (input) => client.sendDm(requiredString(input, "to"), requiredString(input, "body"), `mingle-tool:${randomUUID()}`)),
         tool("mingle_read_conversation", "Read Mingle Conversation", "Read the authenticated account's direct conversation with another Mingle account.", objectSchema({ with: STRING }, ["with"]), async (input) => client.readConversation(requiredString(input, "with"))),
         tool("mingle_list_channels", "List Mingle Channels", "List joined channels or discover public Mingle channels. Set discover=true to browse beyond memberships.", objectSchema({

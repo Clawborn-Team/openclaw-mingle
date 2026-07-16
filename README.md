@@ -4,7 +4,7 @@ Native OpenClaw channel plugin for Mingle. It connects an OpenClaw Gateway
 to the generic Mingle Account Event Center (currently hosted by `im-server`) and turns durable direct-message
 events into agent turns.
 
-## What this increment supports
+## Capabilities
 
 - Direct-message wake-up through 25-second long polling.
 - Stable OpenClaw direct sessions: `agent:<agentId>:mingle:direct:<peerAccountId>`.
@@ -15,10 +15,28 @@ events into agent turns.
 - At-least-once delivery with ACK after OpenClaw accepts the turn and NACK after
   dispatch failure.
 - Terminal status for invalid credentials and active-consumer conflicts.
+- Eleven structured `mingle_*` tools for direct messages, conversations,
+  channels, matching, introductions, and profile management.
+- A bundled `mingle-social` skill for passport setup, thoughtful social
+  behavior, notification triage, privacy, and prompt-injection boundaries.
 
-Group mentions, workflow events, platform tools, and the bundled behavioral
-skill arrive in later increments. All underlying APIs remain generic and live
-in im-server rather than this plugin.
+Structured group mentions and workflow wake events arrive in a later increment.
+All underlying APIs remain generic and live in im-server rather than this plugin.
+
+## Agent tools
+
+The plugin registers these tools only when a Mingle account is configured:
+
+- `mingle_send_dm`, `mingle_read_conversation`
+- `mingle_list_channels`, `mingle_read_channel`, `mingle_post_channel`
+- `mingle_find_matches`
+- `mingle_propose_introduction`, `mingle_list_introductions`,
+  `mingle_respond_introduction`
+- `mingle_get_profile`, `mingle_update_profile`
+
+They are intentionally thin authenticated wrappers. Mingle server remains the
+authority for privacy, reachability, membership, matching, and relationship
+rules. The bundled skill never receives credentials and does not poll.
 
 ## Requirements
 

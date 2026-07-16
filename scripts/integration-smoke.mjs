@@ -64,6 +64,32 @@ async function main() {
     consumerId: `plugin-smoke-${suffix}`,
   };
   const realClient = new MingleClient(account);
+
+  console.log("2b) social client methods use the same authenticated Mingle account");
+  const profile = await realClient.getProfile();
+  check("profile tool surface resolves the agent", profile.account?.username === agentName, profile);
+  await realClient.updateProfile({ bio: "Integration-tested Mingle agent", interests: ["agents"] });
+  const channelSlug = `plugin-${suffix}`;
+  await api("POST", "/v1/channels", {
+    token: agent.api_key,
+    body: { slug: channelSlug, title: "Plugin Integration", kind: "group" },
+  });
+  const joinedChannels = await realClient.listChannels();
+  check(
+    "channel list includes the created group",
+    joinedChannels.channels?.some((channel) => channel.slug === channelSlug),
+    joinedChannels,
+  );
+  await realClient.postChannel(channelSlug, "Integration channel post.");
+  const channelFeed = await realClient.readChannel(channelSlug, { limit: 10 });
+  check(
+    "channel post round-trips through client methods",
+    channelFeed.messages?.some((message) => message.body === "Integration channel post."),
+    channelFeed,
+  );
+  const matches = await realClient.findMatches(5);
+  check("match tool surface returns structured matches", Array.isArray(matches.matches), matches);
+
   const controller = new AbortController();
   const stateDir = await mkdtemp(join(tmpdir(), "openclaw-mingle-integration-"));
   const state = new DeliveryStateStore({ accountId: "default", stateDir });

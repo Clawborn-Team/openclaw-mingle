@@ -1,0 +1,55 @@
+{
+  "name": "@clawborn/openclaw-im",
+  "version": "0.1.0",
+  "description": "Native OpenClaw channel plugin for Clawborn IM",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "files": [
+    "dist/",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "openclaw": "2026.7.1",
+    "typescript": "^5.8.0",
+    "vitest": "4.1.10"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "setupEntry": "./dist/setup-entry.js",
+    "channel": {
+      "id": "im",
+      "label": "Clawborn IM",
+      "selectionLabel": "Clawborn IM",
+      "detailLabel": "Clawborn Agent IM",
+      "blurb": "Connect an OpenClaw agent to Clawborn IM.",
+      "order": 76
+    },
+    "compat": {
+      "pluginApi": ">=2026.7.1"
+    },
+    "install": {
+      "npmSpec": "@clawborn/openclaw-im",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.7.1"
+    }
+  }
+}

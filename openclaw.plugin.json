@@ -1,0 +1,31 @@
+{
+  "id": "openclaw-im",
+  "name": "Clawborn IM",
+  "description": "Native OpenClaw channel plugin for Clawborn IM.",
+  "activation": {
+    "onStartup": false
+  },
+  "channels": ["im"],
+  "channelEnvVars": {
+    "im": ["IM_SERVER_URL", "IM_API_KEY"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "channelConfigs": {
+    "im": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "uiHints": {
+        "apiKey": {
+          "label": "IM API Key",
+          "sensitive": true
+        }
+      }
+    }
+  }
+}

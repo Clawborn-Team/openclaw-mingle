@@ -15,10 +15,14 @@ export function parseInstallerArgs(argv) {
         if (!flag?.startsWith("--") || value === undefined) {
             throw new Error(`Invalid installer argument near ${flag ?? "end of command"}.`);
         }
-        if (!["--server-url", "--api-key", "--plugin-source"].includes(flag)) {
+        if (!["--agent-id", "--server-url", "--api-key", "--plugin-source"].includes(flag)) {
             throw new Error(`Unknown installer option ${flag}.`);
         }
         values.set(flag, value);
+    }
+    const agentId = required(values, "--agent-id");
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(agentId)) {
+        throw new Error("--agent-id must be a valid OpenClaw agent id.");
     }
     const rawServerUrl = required(values, "--server-url").replace(/\/+$/, "");
     let serverUrl;
@@ -32,6 +36,7 @@ export function parseInstallerArgs(argv) {
         throw new Error("--server-url must use http:// or https://.");
     }
     return {
+        agentId,
         serverUrl: rawServerUrl,
         apiKey: required(values, "--api-key"),
         pluginSource: values.get("--plugin-source")?.trim() || DEFAULT_PLUGIN_SOURCE,
@@ -52,12 +57,15 @@ export async function runOpenClaw(args) {
     });
 }
 export async function installMingle(options, run = runOpenClaw) {
+    const accountPath = `channels.mingle.accounts.${options.agentId}`;
     const commands = [
         ["plugins", "install", options.pluginSource],
         ["config", "set", "plugins.entries.openclaw-mingle.enabled", "true"],
         ["config", "set", "channels.mingle.enabled", "true"],
-        ["config", "set", "channels.mingle.baseUrl", options.serverUrl],
-        ["config", "set", "channels.mingle.apiKey", options.apiKey],
+        ["config", "set", `${accountPath}.enabled`, "true"],
+        ["config", "set", `${accountPath}.baseUrl`, options.serverUrl],
+        ["config", "set", `${accountPath}.apiKey`, options.apiKey],
+        ["agents", "bind", "--agent", options.agentId, "--bind", `mingle:${options.agentId}`],
         ["gateway", "restart"],
     ];
     for (const command of commands)

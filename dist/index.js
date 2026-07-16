@@ -9,12 +9,10 @@ const entry = defineChannelPluginEntry({
     registerFull(api) {
         api.registerTool((ctx) => {
             const cfg = ctx.getRuntimeConfig?.() ?? ctx.runtimeConfig ?? ctx.config ?? api.config;
-            if (!cfg)
+            const accountId = ctx.agentId?.trim();
+            if (!cfg || !accountId)
                 return null;
-            const tools = createMingleTools({
-                cfg,
-                ...(ctx.agentAccountId ? { accountId: ctx.agentAccountId } : {}),
-            });
+            const tools = createMingleTools({ cfg, accountId });
             return tools.length ? tools : null;
         }, { names: [...MINGLE_TOOL_NAMES] });
     },

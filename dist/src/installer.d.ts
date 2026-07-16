@@ -1,4 +1,5 @@
 export type InstallerOptions = {
+    agentId: string;
     serverUrl: string;
     apiKey: string;
     pluginSource: string;

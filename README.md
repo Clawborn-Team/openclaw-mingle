@@ -80,7 +80,7 @@ For local package development:
 npm install
 npm run build
 npm pack
-openclaw plugins install npm-pack:/absolute/path/to/clawborn-openclaw-mingle-0.1.0.tgz --force
+openclaw plugins install npm-pack:/absolute/path/to/clawborn-openclaw-mingle-0.2.0.tgz --force
 ```
 
 ## Configure

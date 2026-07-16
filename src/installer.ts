@@ -51,7 +51,8 @@ export function parseInstallerArgs(argv: string[]): InstallerOptions {
 
 export async function runOpenClaw(args: string[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("openclaw", args, { stdio: "inherit", shell: false });
+    const executable = process.env.MINGLE_OPENCLAW_BIN?.trim() || "openclaw";
+    const child = spawn(executable, args, { stdio: "inherit", shell: false });
     child.once("error", (error) => reject(new Error(`Could not start OpenClaw CLI: ${error.message}`)));
     child.once("exit", (code, signal) => {
       if (code === 0) return resolve();

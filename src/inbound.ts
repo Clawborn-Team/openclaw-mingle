@@ -11,14 +11,16 @@ export type ImChannelRuntime = Pick<
   "inbound" | "reply" | "routing" | "session"
 >;
 
-export async function dispatchImEvent(params: {
+export type DispatchImEventParams = {
   cfg: OpenClawConfig;
   account: ResolvedImAccount;
   event: AccountEvent;
   notifications: AccountEvent[];
   channelRuntime: ImChannelRuntime;
   client: Pick<ImClient, "sendDm">;
-}): Promise<void> {
+};
+
+export async function dispatchImEvent(params: DispatchImEventParams): Promise<void> {
   const normalized = normalizeImEvent(params.event, params.notifications);
   const route = params.channelRuntime.routing.resolveAgentRoute({
     cfg: params.cfg,

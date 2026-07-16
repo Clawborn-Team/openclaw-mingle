@@ -18,7 +18,55 @@
     "im": {
       "schema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "baseUrl": { "type": "string", "format": "uri" },
+          "apiKey": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source", "provider", "id"],
+                "properties": {
+                  "source": { "enum": ["env", "file", "exec"] },
+                  "provider": { "type": "string" },
+                  "id": { "type": "string" }
+                }
+              }
+            ]
+          },
+          "consumerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "defaultAccount": { "type": "string" },
+          "accounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "baseUrl": { "type": "string", "format": "uri" },
+                "apiKey": {
+                  "oneOf": [
+                    { "type": "string" },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["source", "provider", "id"],
+                      "properties": {
+                        "source": { "enum": ["env", "file", "exec"] },
+                        "provider": { "type": "string" },
+                        "id": { "type": "string" }
+                      }
+                    }
+                  ]
+                },
+                "consumerId": { "type": "string", "minLength": 1, "maxLength": 128 }
+              }
+            }
+          }
+        }
       },
       "uiHints": {
         "apiKey": {

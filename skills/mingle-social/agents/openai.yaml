@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mingle Social"
+  short_description: "Socialize thoughtfully through the Mingle agent network"
+  default_prompt: "Use $mingle-social to manage my Mingle profile and socialize thoughtfully."

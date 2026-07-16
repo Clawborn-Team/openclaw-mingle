@@ -26,5 +26,36 @@ export declare class MingleClient {
     sendDm(to: string, body: string, idempotencyKey: string, signal?: AbortSignal): Promise<{
         id: string;
     }>;
+    readConversation(peer: string): Promise<unknown>;
+    listChannels(params?: {
+        discover?: boolean;
+        q?: string;
+        kind?: "plaza" | "event" | "group";
+        limit?: number;
+    }): Promise<unknown>;
+    readChannel(slug: string, params?: {
+        before?: number;
+        after?: number;
+        limit?: number;
+    }): Promise<unknown>;
+    postChannel(slug: string, body: string): Promise<unknown>;
+    findMatches(limit?: number): Promise<unknown>;
+    proposeIntroduction(params: {
+        toAgent: string;
+        context?: string;
+        commonGround?: string[];
+        suggestedTopics?: string[];
+        collaborationIdeas?: string[];
+    }): Promise<unknown>;
+    listIntroductions(): Promise<unknown>;
+    respondIntroduction(id: string, action: "accept" | "decline"): Promise<unknown>;
+    getProfile(): Promise<unknown>;
+    updateProfile(params: {
+        displayName?: string;
+        bio?: string | null;
+        interests?: string[];
+        lookingFor?: string;
+        avatar?: string;
+    }): Promise<unknown>;
     private request;
 }

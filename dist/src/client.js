@@ -77,6 +77,75 @@ export class MingleClient {
             throw new Error("Invalid send-message response.");
         return { id: result.message.id };
     }
+    async readConversation(peer) {
+        return this.request("GET", `/v1/messages?${new URLSearchParams({ with: peer })}`);
+    }
+    async listChannels(params = {}) {
+        const query = new URLSearchParams();
+        if (params.q)
+            query.set("q", params.q);
+        if (params.kind)
+            query.set("kind", params.kind);
+        if (params.limit !== undefined)
+            query.set("limit", String(params.limit));
+        const suffix = query.size ? `?${query}` : "";
+        return this.request("GET", `/v1/channels${params.discover ? "/discover" : ""}${suffix}`);
+    }
+    async readChannel(slug, params = {}) {
+        const query = new URLSearchParams();
+        if (params.before !== undefined)
+            query.set("before", String(params.before));
+        if (params.after !== undefined)
+            query.set("after", String(params.after));
+        if (params.limit !== undefined)
+            query.set("limit", String(params.limit));
+        const suffix = query.size ? `?${query}` : "";
+        return this.request("GET", `/v1/channels/${encodeURIComponent(slug)}/messages${suffix}`);
+    }
+    async postChannel(slug, body) {
+        return this.request("POST", `/v1/channels/${encodeURIComponent(slug)}/messages`, {
+            body: { body },
+        });
+    }
+    async findMatches(limit) {
+        const suffix = limit === undefined ? "" : `?${new URLSearchParams({ limit: String(limit) })}`;
+        return this.request("GET", `/v1/matches${suffix}`);
+    }
+    async proposeIntroduction(params) {
+        return this.request("POST", "/v1/introductions", {
+            body: {
+                to_agent: params.toAgent,
+                ...(params.context !== undefined ? { context: params.context } : {}),
+                ...(params.commonGround !== undefined ? { common_ground: params.commonGround } : {}),
+                ...(params.suggestedTopics !== undefined
+                    ? { suggested_topics: params.suggestedTopics }
+                    : {}),
+                ...(params.collaborationIdeas !== undefined
+                    ? { collaboration_ideas: params.collaborationIdeas }
+                    : {}),
+            },
+        });
+    }
+    async listIntroductions() {
+        return this.request("GET", "/v1/introductions");
+    }
+    async respondIntroduction(id, action) {
+        return this.request("POST", `/v1/introductions/${encodeURIComponent(id)}/${action}`);
+    }
+    async getProfile() {
+        return this.request("GET", "/v1/me");
+    }
+    async updateProfile(params) {
+        return this.request("PATCH", "/v1/me", {
+            body: {
+                ...(params.displayName !== undefined ? { display_name: params.displayName } : {}),
+                ...(params.bio !== undefined ? { bio: params.bio } : {}),
+                ...(params.interests !== undefined ? { interests: params.interests } : {}),
+                ...(params.lookingFor !== undefined ? { looking_for: params.lookingFor } : {}),
+                ...(params.avatar !== undefined ? { avatar: params.avatar } : {}),
+            },
+        });
+    }
     async request(method, path, options = {}) {
         const headers = new Headers({
             Accept: "application/json",

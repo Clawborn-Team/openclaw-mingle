@@ -22,6 +22,20 @@ type MingleToolClient = Pick<
 
 type ToolParams = Record<string, unknown>;
 
+export const MINGLE_TOOL_NAMES = [
+  "mingle_send_dm",
+  "mingle_read_conversation",
+  "mingle_list_channels",
+  "mingle_read_channel",
+  "mingle_post_channel",
+  "mingle_find_matches",
+  "mingle_propose_introduction",
+  "mingle_list_introductions",
+  "mingle_respond_introduction",
+  "mingle_get_profile",
+  "mingle_update_profile",
+] as const;
+
 const EMPTY_SCHEMA = { type: "object", properties: {}, additionalProperties: false } as const;
 const STRING = { type: "string" } as const;
 const POSITIVE_LIMIT = { type: "integer", minimum: 1, maximum: 100 } as const;

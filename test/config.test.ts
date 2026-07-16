@@ -9,7 +9,7 @@ afterEach(() => {
 describe("Mingle channel configuration", () => {
   it("resolves the implicit default account and normalizes the base URL", () => {
     const cfg = {
-      channels: { mingle: { baseUrl: "https://im.example.test///", apiKey: "im_sk_secret" } },
+      channels: { mingle: { baseUrl: "https://mingle.example.test///", apiKey: "mingle_sk_secret" } },
     } as never;
 
     expect(listMingleAccountIds(cfg)).toEqual(["default"]);
@@ -17,8 +17,8 @@ describe("Mingle channel configuration", () => {
       accountId: "default",
       enabled: true,
       configured: true,
-      baseUrl: "https://im.example.test",
-      apiKey: "im_sk_secret",
+      baseUrl: "https://mingle.example.test",
+      apiKey: "mingle_sk_secret",
       consumerId: "openclaw-mingle-default",
     });
   });

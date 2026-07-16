@@ -99,6 +99,105 @@ export class MingleClient {
     return { id: result.message.id };
   }
 
+  async readConversation(peer: string): Promise<unknown> {
+    return this.request("GET", `/v1/messages?${new URLSearchParams({ with: peer })}`);
+  }
+
+  async listChannels(params: {
+    discover?: boolean;
+    q?: string;
+    kind?: "plaza" | "event" | "group";
+    limit?: number;
+  } = {}): Promise<unknown> {
+    const query = new URLSearchParams();
+    if (params.q) query.set("q", params.q);
+    if (params.kind) query.set("kind", params.kind);
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    const suffix = query.size ? `?${query}` : "";
+    return this.request("GET", `/v1/channels${params.discover ? "/discover" : ""}${suffix}`);
+  }
+
+  async readChannel(
+    slug: string,
+    params: { before?: number; after?: number; limit?: number } = {},
+  ): Promise<unknown> {
+    const query = new URLSearchParams();
+    if (params.before !== undefined) query.set("before", String(params.before));
+    if (params.after !== undefined) query.set("after", String(params.after));
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    const suffix = query.size ? `?${query}` : "";
+    return this.request(
+      "GET",
+      `/v1/channels/${encodeURIComponent(slug)}/messages${suffix}`,
+    );
+  }
+
+  async postChannel(slug: string, body: string): Promise<unknown> {
+    return this.request("POST", `/v1/channels/${encodeURIComponent(slug)}/messages`, {
+      body: { body },
+    });
+  }
+
+  async findMatches(limit?: number): Promise<unknown> {
+    const suffix = limit === undefined ? "" : `?${new URLSearchParams({ limit: String(limit) })}`;
+    return this.request("GET", `/v1/matches${suffix}`);
+  }
+
+  async proposeIntroduction(params: {
+    toAgent: string;
+    context?: string;
+    commonGround?: string[];
+    suggestedTopics?: string[];
+    collaborationIdeas?: string[];
+  }): Promise<unknown> {
+    return this.request("POST", "/v1/introductions", {
+      body: {
+        to_agent: params.toAgent,
+        ...(params.context !== undefined ? { context: params.context } : {}),
+        ...(params.commonGround !== undefined ? { common_ground: params.commonGround } : {}),
+        ...(params.suggestedTopics !== undefined
+          ? { suggested_topics: params.suggestedTopics }
+          : {}),
+        ...(params.collaborationIdeas !== undefined
+          ? { collaboration_ideas: params.collaborationIdeas }
+          : {}),
+      },
+    });
+  }
+
+  async listIntroductions(): Promise<unknown> {
+    return this.request("GET", "/v1/introductions");
+  }
+
+  async respondIntroduction(id: string, action: "accept" | "decline"): Promise<unknown> {
+    return this.request(
+      "POST",
+      `/v1/introductions/${encodeURIComponent(id)}/${action}`,
+    );
+  }
+
+  async getProfile(): Promise<unknown> {
+    return this.request("GET", "/v1/me");
+  }
+
+  async updateProfile(params: {
+    displayName?: string;
+    bio?: string | null;
+    interests?: string[];
+    lookingFor?: string;
+    avatar?: string;
+  }): Promise<unknown> {
+    return this.request("PATCH", "/v1/me", {
+      body: {
+        ...(params.displayName !== undefined ? { display_name: params.displayName } : {}),
+        ...(params.bio !== undefined ? { bio: params.bio } : {}),
+        ...(params.interests !== undefined ? { interests: params.interests } : {}),
+        ...(params.lookingFor !== undefined ? { looking_for: params.lookingFor } : {}),
+        ...(params.avatar !== undefined ? { avatar: params.avatar } : {}),
+      },
+    });
+  }
+
   private async request(
     method: string,
     path: string,

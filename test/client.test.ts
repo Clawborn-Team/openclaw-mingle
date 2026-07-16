@@ -5,8 +5,8 @@ const account = {
   accountId: "default",
   enabled: true,
   configured: true,
-  baseUrl: "https://im.example.test",
-  apiKey: "im_sk_top_secret",
+  baseUrl: "https://mingle.example.test",
+  apiKey: "mingle_sk_top_secret",
   consumerId: "openclaw-mingle-default",
 };
 
@@ -33,10 +33,10 @@ describe("MingleClient", () => {
     expect(packet.next_cursor).toBe("cursor-2");
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(String(url)).toBe(
-      "https://im.example.test/v1/event-center/updates?cursor=cursor-1&wait=25000",
+      "https://mingle.example.test/v1/event-center/updates?cursor=cursor-1&wait=25000",
     );
     expect(init).toMatchObject({ signal });
-    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer im_sk_top_secret");
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer mingle_sk_top_secret");
     expect(new Headers(init?.headers).get("X-Mingle-Consumer-ID")).toBe("openclaw-mingle-default");
   });
 
@@ -98,5 +98,70 @@ describe("MingleClient", () => {
     await expect(new MingleClient(account).poll({ waitMs: 0 })).rejects.toThrow(
       "Invalid Event Center response",
     );
+  });
+
+  it("maps the Mingle social surface to the public REST API", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new MingleClient(account);
+
+    await client.readConversation("peer name");
+    await client.listChannels({ discover: true, q: "agent clubs", kind: "group", limit: 12 });
+    await client.readChannel("builders", { after: 4, limit: 20 });
+    await client.postChannel("builders", "hello group");
+    await client.findMatches(8);
+    await client.proposeIntroduction({
+      toAgent: "other-agent",
+      context: "We both build agent systems.",
+      commonGround: ["agents"],
+      suggestedTopics: ["reliability"],
+      collaborationIdeas: ["compare designs"],
+    });
+    await client.listIntroductions();
+    await client.respondIntroduction("intro/id", "accept");
+    await client.getProfile();
+    await client.updateProfile({
+      displayName: "Mingle Lobster",
+      bio: "Helpful",
+      interests: ["agents"],
+      lookingFor: "Builders",
+      avatar: "🦞",
+    });
+
+    expect(fetchMock.mock.calls.map(([url, init]) => [String(url), init?.method])).toEqual([
+      ["https://mingle.example.test/v1/messages?with=peer+name", "GET"],
+      [
+        "https://mingle.example.test/v1/channels/discover?q=agent+clubs&kind=group&limit=12",
+        "GET",
+      ],
+      ["https://mingle.example.test/v1/channels/builders/messages?after=4&limit=20", "GET"],
+      ["https://mingle.example.test/v1/channels/builders/messages", "POST"],
+      ["https://mingle.example.test/v1/matches?limit=8", "GET"],
+      ["https://mingle.example.test/v1/introductions", "POST"],
+      ["https://mingle.example.test/v1/introductions", "GET"],
+      ["https://mingle.example.test/v1/introductions/intro%2Fid/accept", "POST"],
+      ["https://mingle.example.test/v1/me", "GET"],
+      ["https://mingle.example.test/v1/me", "PATCH"],
+    ]);
+    expect(JSON.parse(String(fetchMock.mock.calls[3]![1]?.body))).toEqual({ body: "hello group" });
+    expect(JSON.parse(String(fetchMock.mock.calls[5]![1]?.body))).toEqual({
+      to_agent: "other-agent",
+      context: "We both build agent systems.",
+      common_ground: ["agents"],
+      suggested_topics: ["reliability"],
+      collaboration_ideas: ["compare designs"],
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[9]![1]?.body))).toEqual({
+      display_name: "Mingle Lobster",
+      bio: "Helpful",
+      interests: ["agents"],
+      looking_for: "Builders",
+      avatar: "🦞",
+    });
   });
 });

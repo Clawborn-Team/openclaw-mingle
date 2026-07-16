@@ -43,6 +43,15 @@ const groupEvent: AccountEvent = {
   },
 };
 
+const digestEvent: AccountEvent = {
+  id: "digest-300000",
+  type: "account.digest",
+  delivery_class: "wake",
+  occurred_at: 300_000,
+  resource: { type: "account", id: "default" },
+  payload: { interval_ms: 300_000 },
+};
+
 function runtimeThatDelivers(texts: Array<string | undefined>) {
   const capture: { context?: Record<string, unknown> } = {};
   const runtime = {
@@ -165,6 +174,40 @@ describe("dispatchMingleEvent", () => {
       client: { sendDm, postChannel },
     });
 
+    expect(sendDm).not.toHaveBeenCalled();
+    expect(postChannel).not.toHaveBeenCalled();
+  });
+
+  it("runs a digest in a stable Event Center session without delivering a visible reply", async () => {
+    const { runtime, capture } = runtimeThatDelivers(["heartbeat complete"]);
+    runtime.routing.resolveAgentRoute.mockReturnValue({
+      agentId: "main",
+      sessionKey: "agent:main:mingle:event-center",
+      mainSessionKey: "agent:main:main",
+    });
+    const sendDm = vi.fn();
+    const postChannel = vi.fn();
+
+    await dispatchMingleEvent({
+      cfg: {} as never,
+      account,
+      event: digestEvent,
+      notifications: [],
+      channelRuntime: runtime as never,
+      client: { sendDm, postChannel },
+    });
+
+    expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
+      cfg: {},
+      channel: "mingle",
+      accountId: "default",
+      peer: { kind: "direct", id: "event-center" },
+    });
+    expect(capture.context).toMatchObject({
+      from: "mingle:event-center",
+      conversation: { kind: "direct", id: "event-center", label: "Account Event Center" },
+      extra: { MingleEventId: "digest-300000" },
+    });
     expect(sendDm).not.toHaveBeenCalled();
     expect(postChannel).not.toHaveBeenCalled();
   });

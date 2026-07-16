@@ -22,11 +22,15 @@ export type DispatchMingleEventParams = {
 
 export async function dispatchMingleEvent(params: DispatchMingleEventParams): Promise<void> {
   const normalized = normalizeMingleEvent(params.event, params.notifications);
+  const isDigest = normalized.route.kind === "event-center";
   const agentRoute = params.channelRuntime.routing.resolveAgentRoute({
     cfg: params.cfg,
     channel: CHANNEL_ID,
     accountId: params.account.accountId,
-    peer: { kind: normalized.route.kind, id: normalized.route.id },
+    peer: {
+      kind: normalized.route.kind === "group" ? "group" : "direct",
+      id: normalized.route.id,
+    },
   });
   const sessionKey = agentRoute.sessionKey;
   const from =
@@ -58,15 +62,18 @@ export async function dispatchMingleEvent(params: DispatchMingleEventParams): Pr
           accountId: params.account.accountId,
           timestamp: input.timestamp ?? params.event.occurred_at,
           from,
-          sender: {
-            id: normalized.packet.trigger.sender.id,
-            name:
-              normalized.packet.trigger.sender.display_name ||
-              normalized.packet.trigger.sender.username,
-            username: normalized.packet.trigger.sender.username,
-          },
+          sender:
+            normalized.packet.trigger.type === "account.digest"
+              ? { id: "mingle", name: "Mingle", username: "mingle" }
+              : {
+                  id: normalized.packet.trigger.sender.id,
+                  name:
+                    normalized.packet.trigger.sender.display_name ||
+                    normalized.packet.trigger.sender.username,
+                  username: normalized.packet.trigger.sender.username,
+                },
           conversation: {
-            kind: normalized.route.kind,
+            kind: normalized.route.kind === "group" ? "group" : "direct",
             id: normalized.route.id,
             label: normalized.route.label,
           },
@@ -84,7 +91,9 @@ export async function dispatchMingleEvent(params: DispatchMingleEventParams): Pr
           },
           extra: {
             MingleEventId: params.event.id,
-            MingleMessageId: normalized.packet.trigger.message.id,
+            ...(normalized.packet.trigger.type === "account.digest"
+              ? {}
+              : { MingleMessageId: normalized.packet.trigger.message.id }),
           },
         });
         const storePath = params.channelRuntime.session.resolveStorePath(
@@ -105,6 +114,7 @@ export async function dispatchMingleEvent(params: DispatchMingleEventParams): Pr
           delivery: {
             durable: () => ({ to: replyTo }),
             deliver: async (payload) => {
+              if (isDigest) return { visibleReplySent: false };
               const text = payload.text?.trim();
               if (!text) return { visibleReplySent: false };
               const index = replyIndex++;

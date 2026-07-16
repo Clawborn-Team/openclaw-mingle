@@ -1,6 +1,7 @@
 import { MingleApiError } from "./client.js";
 import { dispatchMingleEvent, } from "./inbound.js";
 import { MalformedMingleEventError, UnsupportedMingleEventError } from "./packet.js";
+const DEFAULT_DIGEST_INTERVAL_MS = 300_000;
 function abortableSleep(ms, signal) {
     if (signal.aborted)
         return Promise.resolve();
@@ -23,14 +24,19 @@ export async function monitorMingleAccount(options) {
     const dispatch = options.dispatch ?? dispatchMingleEvent;
     const sleep = options.sleep ?? abortableSleep;
     const random = options.random ?? Math.random;
+    const now = options.now ?? Date.now;
+    const digestIntervalMs = options.digestIntervalMs ?? DEFAULT_DIGEST_INTERVAL_MS;
     let cursor = (await options.state.load()).cursor;
     let retryAttempt = 0;
+    let nextDigestAt = now() + digestIntervalMs;
     options.setStatus?.({ state: "starting" });
     while (!options.abortSignal.aborted) {
         try {
+            const digestDue = now() >= nextDigestAt;
             const response = await options.client.poll({
                 ...(cursor ? { cursor } : {}),
-                waitMs: 25_000,
+                waitMs: digestDue ? 0 : Math.min(25_000, Math.max(nextDigestAt - now(), 0)),
+                ...(digestDue ? { digest: true } : {}),
                 signal: options.abortSignal,
             });
             cursor = response.next_cursor;
@@ -47,6 +53,7 @@ export async function monitorMingleAccount(options) {
                 }
             }
             let notificationsAttached = false;
+            let completedTurn = false;
             for (const event of response.events) {
                 if (await options.state.hasAccepted(event.id)) {
                     await options.client.ack([event.id], [], options.abortSignal);
@@ -73,8 +80,41 @@ export async function monitorMingleAccount(options) {
                 }
                 await options.client.ack([event.id], notifications.map((notification) => notification.id), options.abortSignal);
                 notificationsAttached = true;
-                options.setStatus?.({ state: "connected", lastEventAt: Date.now() });
+                completedTurn = true;
+                options.setStatus?.({ state: "connected", lastEventAt: now() });
             }
+            if (response.events.length === 0 && digestDue) {
+                const digestEvent = {
+                    id: `digest:${options.account.accountId}:${now()}`,
+                    type: "account.digest",
+                    delivery_class: "wake",
+                    occurred_at: now(),
+                    resource: { type: "account", id: options.account.accountId },
+                    payload: { interval_ms: digestIntervalMs },
+                };
+                try {
+                    await dispatch({
+                        cfg: options.cfg,
+                        account: options.account,
+                        event: digestEvent,
+                        notifications: pendingNotifications,
+                        channelRuntime: options.channelRuntime,
+                        client: options.client,
+                    });
+                }
+                catch {
+                    nextDigestAt = now() + digestIntervalMs;
+                    continue;
+                }
+                for (const notification of pendingNotifications) {
+                    await options.state.markAccepted(notification.id);
+                }
+                await options.client.ack([], pendingNotifications.map((notification) => notification.id), options.abortSignal);
+                completedTurn = true;
+                options.setStatus?.({ state: "connected", lastEventAt: now() });
+            }
+            if (completedTurn)
+                nextDigestAt = now() + digestIntervalMs;
         }
         catch (error) {
             if (options.abortSignal.aborted)

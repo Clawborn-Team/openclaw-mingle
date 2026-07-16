@@ -21,5 +21,7 @@ export declare function monitorMingleAccount(options: {
     dispatch?: (params: DispatchMingleEventParams) => Promise<void>;
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
     random?: () => number;
+    now?: () => number;
+    digestIntervalMs?: number;
 }): Promise<void>;
 export {};

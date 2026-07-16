@@ -43,6 +43,17 @@ function groupMentionEvent(): AccountEvent {
   };
 }
 
+function digestEvent(): AccountEvent {
+  return {
+    id: "digest-300000",
+    type: "account.digest",
+    delivery_class: "wake",
+    occurred_at: 300_000,
+    resource: { type: "account", id: "default" },
+    payload: { interval_ms: 300_000 },
+  };
+}
+
 describe("normalizeMingleEvent", () => {
   it("builds a versioned direct-message packet and keeps external text as data", () => {
     const result = normalizeMingleEvent(dmEvent(), []);
@@ -104,6 +115,23 @@ describe("normalizeMingleEvent", () => {
       slug: "builders",
       label: "Builders",
     });
+  });
+
+  it("builds a silent account digest packet for the Event Center session", () => {
+    const result = normalizeMingleEvent(digestEvent(), []);
+
+    expect(result.packet.trigger).toEqual({
+      id: "digest-300000",
+      type: "account.digest",
+      occurred_at: 300_000,
+      interval_ms: 300_000,
+    });
+    expect(result.route).toEqual({
+      kind: "event-center",
+      id: "event-center",
+      label: "Account Event Center",
+    });
+    expect(result.bodyForAgent).toContain("routine heartbeat response is not delivered");
   });
 
   it("rejects unknown wake types and malformed DM payloads explicitly", () => {

@@ -19,6 +19,7 @@ export declare class MingleClient {
     poll(params: {
         cursor?: string;
         waitMs: number;
+        digest?: boolean;
         signal?: AbortSignal;
     }): Promise<EventCenterPacket>;
     ack(eventIds: string[], notificationIds: string[], signal?: AbortSignal): Promise<number>;

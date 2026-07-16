@@ -52,11 +52,13 @@ export class MingleClient {
   async poll(params: {
     cursor?: string;
     waitMs: number;
+    digest?: boolean;
     signal?: AbortSignal;
   }): Promise<EventCenterPacket> {
     const query = new URLSearchParams();
     if (params.cursor) query.set("cursor", params.cursor);
     query.set("wait", String(params.waitMs));
+    if (params.digest) query.set("digest", "true");
     const value = await this.request("GET", `/v1/event-center/updates?${query}`, {
       consumer: true,
       ...(params.signal ? { signal: params.signal } : {}),

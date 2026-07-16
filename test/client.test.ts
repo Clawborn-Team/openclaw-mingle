@@ -40,6 +40,27 @@ describe("MingleClient", () => {
     expect(new Headers(init?.headers).get("X-Mingle-Consumer-ID")).toBe("openclaw-mingle-default");
   });
 
+  it("requests an immediate digest boundary explicitly", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          schema: "mingle.account-event-center.v1",
+          events: [],
+          notifications: [],
+          next_cursor: "cursor-digest",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new MingleClient(account).poll({ waitMs: 0, digest: true });
+
+    expect(String(fetchMock.mock.calls[0]![0])).toBe(
+      "https://mingle.example.test/v1/event-center/updates?wait=0&digest=true",
+    );
+  });
+
   it("ACKs, NACKs, and sends idempotent DM and group replies with the generic REST contract", async () => {
     const fetchMock = vi
       .fn()

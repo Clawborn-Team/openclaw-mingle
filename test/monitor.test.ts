@@ -269,4 +269,126 @@ describe("monitorMingleAccount", () => {
     expect(sleeps).toEqual([7_000, 1_000]);
     expect(client.poll).toHaveBeenCalledTimes(3);
   });
+
+  it("wakes a quiet account on the digest deadline and ACKs attached notifications once", async () => {
+    let now = 0;
+    const notification = {
+      ...event("ntf-digest"),
+      type: "channel.activity",
+      delivery_class: "notification" as const,
+    };
+    const client = {
+      poll: vi
+        .fn()
+        .mockImplementationOnce(async (params) => {
+          expect(params).toMatchObject({ waitMs: 25_000 });
+          expect(params.digest).toBeUndefined();
+          now = 300_000;
+          return packet([]);
+        })
+        .mockImplementationOnce(async (params) => {
+          expect(params).toMatchObject({ waitMs: 0, digest: true });
+          controller.abort();
+          return packet([], [notification], "cursor-digest");
+        }),
+      ack: vi.fn(async () => 1),
+      nack: vi.fn(),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+    const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => undefined);
+
+    await monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      abortSignal: controller.signal,
+      dispatch,
+      now: () => now,
+      digestIntervalMs: 300_000,
+    });
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0]![0].event).toMatchObject({
+      type: "account.digest",
+      resource: { type: "account", id: "default" },
+    });
+    expect(dispatch.mock.calls[0]![0].notifications).toEqual([notification]);
+    expect(client.ack).toHaveBeenCalledWith([], ["ntf-digest"], controller.signal);
+    expect(client.nack).not.toHaveBeenCalled();
+    expect(await state.hasAccepted("ntf-digest")).toBe(true);
+  });
+
+  it("leaves digest notifications pending when the Agent turn fails", async () => {
+    const notification = {
+      ...event("ntf-retry"),
+      type: "channel.activity",
+      delivery_class: "notification" as const,
+    };
+    const client = {
+      poll: vi.fn(async () => {
+        controller.abort();
+        return packet([], [notification]);
+      }),
+      ack: vi.fn(),
+      nack: vi.fn(),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+
+    await monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      abortSignal: controller.signal,
+      dispatch: vi.fn(async () => {
+        throw new Error("Agent turn failed");
+      }),
+      now: () => 300_000,
+      digestIntervalMs: 300_000,
+    });
+
+    expect(client.ack).not.toHaveBeenCalled();
+    expect(client.nack).not.toHaveBeenCalled();
+    expect(await state.hasAccepted("ntf-retry")).toBe(false);
+  });
+
+  it("resets the digest deadline after a successful durable wake", async () => {
+    let now = 250_000;
+    const client = {
+      poll: vi
+        .fn()
+        .mockResolvedValueOnce(packet([event("evt-before-digest")]))
+        .mockImplementationOnce(async (params) => {
+          expect(params.digest).toBeUndefined();
+          expect(params.waitMs).toBe(25_000);
+          controller.abort();
+          return packet([]);
+        }),
+      ack: vi.fn(async () => 1),
+      nack: vi.fn(),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+
+    await monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      abortSignal: controller.signal,
+      dispatch: vi.fn(async () => {
+        now = 300_000;
+      }),
+      now: () => now,
+      digestIntervalMs: 300_000,
+    });
+
+    expect(client.poll).toHaveBeenCalledTimes(2);
+  });
 });

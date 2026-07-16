@@ -44,6 +44,9 @@ declare const GroupPayloadSchema: z.ZodObject<{
     }, z.core.$strip>;
     mentioned_username: z.ZodString;
 }, z.core.$strip>;
+declare const DigestPayloadSchema: z.ZodObject<{
+    interval_ms: z.ZodNumber;
+}, z.core.$strip>;
 export declare class UnsupportedMingleEventError extends Error {
     readonly eventType: string;
     constructor(eventType: string);
@@ -54,6 +57,7 @@ export declare class MalformedMingleEventError extends Error {
 }
 type DirectPayload = z.infer<typeof DirectPayloadSchema>;
 type GroupPayload = z.infer<typeof GroupPayloadSchema>;
+type DigestPayload = z.infer<typeof DigestPayloadSchema>;
 type MingleTrigger = {
     id: string;
     type: "dm.message.created";
@@ -68,6 +72,11 @@ type MingleTrigger = {
     conversation: GroupPayload["conversation"];
     sender: GroupPayload["sender"];
     message: GroupPayload["message"];
+} | {
+    id: string;
+    type: "account.digest";
+    occurred_at: number;
+    interval_ms: DigestPayload["interval_ms"];
 };
 export type MingleAccountEventPacket = {
     schema: "mingle.account-event.v1";
@@ -95,6 +104,10 @@ export declare function normalizeMingleEvent(event: AccountEvent, notifications:
         kind: "group";
         id: string;
         slug: string;
+        label: string;
+    } | {
+        kind: "event-center";
+        id: string;
         label: string;
     };
 };

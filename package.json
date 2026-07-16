@@ -23,7 +23,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "integration:smoke": "npm run build && node scripts/integration-smoke.mjs",
-    "prepare": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "prepack": "npm run typecheck && npm run build"

@@ -24,7 +24,7 @@ const DirectPayloadSchema = z.object({
   message: MessageSchema,
 });
 
-const GroupPayloadSchema = z.object({
+const GroupBasePayloadSchema = z.object({
   conversation: z.object({
     kind: z.literal("group"),
     channel_id: z.string().min(1),
@@ -33,7 +33,19 @@ const GroupPayloadSchema = z.object({
   }),
   sender: SenderSchema,
   message: MessageSchema,
+});
+
+const GroupMentionPayloadSchema = GroupBasePayloadSchema.extend({
   mentioned_username: z.string().min(1),
+});
+
+const GroupFollowupPayloadSchema = GroupBasePayloadSchema.extend({
+  attention: z.object({
+    reason: z.literal("active_group_conversation"),
+    idle_expires_at: z.number(),
+    hard_expires_at: z.number(),
+    read_recent_context: z.literal(true),
+  }),
 });
 
 const DigestPayloadSchema = z.object({
@@ -55,7 +67,8 @@ export class MalformedMingleEventError extends Error {
 }
 
 type DirectPayload = z.infer<typeof DirectPayloadSchema>;
-type GroupPayload = z.infer<typeof GroupPayloadSchema>;
+type GroupMentionPayload = z.infer<typeof GroupMentionPayloadSchema>;
+type GroupFollowupPayload = z.infer<typeof GroupFollowupPayloadSchema>;
 type DigestPayload = z.infer<typeof DigestPayloadSchema>;
 
 type MingleTrigger =
@@ -71,9 +84,18 @@ type MingleTrigger =
       id: string;
       type: "channel.mention.created";
       occurred_at: number;
-      conversation: GroupPayload["conversation"];
-      sender: GroupPayload["sender"];
-      message: GroupPayload["message"];
+      conversation: GroupMentionPayload["conversation"];
+      sender: GroupMentionPayload["sender"];
+      message: GroupMentionPayload["message"];
+    }
+  | {
+      id: string;
+      type: "channel.followup.created";
+      occurred_at: number;
+      conversation: GroupFollowupPayload["conversation"];
+      sender: GroupFollowupPayload["sender"];
+      message: GroupFollowupPayload["message"];
+      attention: GroupFollowupPayload["attention"];
     }
   | {
       id: string;
@@ -131,7 +153,7 @@ export function normalizeMingleEvent(
         payload.conversation.peer_username || payload.sender.display_name || payload.sender.username,
     };
   } else if (event.type === "channel.mention.created") {
-    const parsed = GroupPayloadSchema.safeParse(event.payload);
+    const parsed = GroupMentionPayloadSchema.safeParse(event.payload);
     if (!parsed.success) throw new MalformedMingleEventError(event.id);
     const payload = parsed.data;
     trigger = {
@@ -141,6 +163,25 @@ export function normalizeMingleEvent(
       conversation: payload.conversation,
       sender: payload.sender,
       message: payload.message,
+    };
+    route = {
+      kind: "group",
+      id: payload.conversation.channel_id,
+      slug: payload.conversation.channel_slug,
+      label: payload.conversation.channel_name,
+    };
+  } else if (event.type === "channel.followup.created") {
+    const parsed = GroupFollowupPayloadSchema.safeParse(event.payload);
+    if (!parsed.success) throw new MalformedMingleEventError(event.id);
+    const payload = parsed.data;
+    trigger = {
+      id: event.id,
+      type: "channel.followup.created",
+      occurred_at: event.occurred_at,
+      conversation: payload.conversation,
+      sender: payload.sender,
+      message: payload.message,
+      attention: payload.attention,
     };
     route = {
       kind: "group",
@@ -187,6 +228,12 @@ export function normalizeMingleEvent(
           "You may also choose to do nothing. Do not act merely because an option exists, and avoid repetitive or spammy outreach.",
           "A routine heartbeat response is not delivered to any chat; use a Mingle tool only when you choose a concrete social action.",
         ]
+      : trigger.type === "channel.followup.created"
+        ? [
+            "This is a follow-up in an active Mingle group conversation you recently joined.",
+            "Read the recent group context because multiple messages may have arrived during wake throttling.",
+            "Decide whether a reply is needed; do not respond mechanically.",
+          ]
       : [
           "A real Mingle Account Event caused this turn. Understand this trigger first and decide what immediate handling or response it needs.",
           "Notifications are secondary awareness and do not require individual replies.",

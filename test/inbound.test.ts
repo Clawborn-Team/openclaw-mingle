@@ -43,6 +43,30 @@ const groupEvent: AccountEvent = {
   },
 };
 
+const groupFollowupEvent: AccountEvent = {
+  id: "evt-followup-1",
+  type: "channel.followup.created",
+  delivery_class: "wake",
+  occurred_at: 457,
+  resource: { type: "channel_message", id: "group-msg-2" },
+  payload: {
+    conversation: {
+      kind: "group",
+      channel_id: "channel-1",
+      channel_slug: "builders",
+      channel_name: "Builders",
+    },
+    sender: { id: "user-1", username: "alice", display_name: "Alice", type: "user" },
+    message: { id: "group-msg-2", body: "continue the conversation", created_at: 457 },
+    attention: {
+      reason: "active_group_conversation",
+      idle_expires_at: 120_457,
+      hard_expires_at: 600_457,
+      read_recent_context: true,
+    },
+  },
+};
+
 const digestEvent: AccountEvent = {
   id: "digest-300000",
   type: "account.digest",
@@ -156,6 +180,45 @@ describe("dispatchMingleEvent", () => {
       "builders",
       "group reply",
       "mingle-reply:evt-group-1:0",
+    );
+    expect(sendDm).not.toHaveBeenCalled();
+  });
+
+  it("routes an active follow-up through the same group session and reply target", async () => {
+    const { runtime, capture } = runtimeThatDelivers(["follow-up reply"]);
+    runtime.routing.resolveAgentRoute.mockReturnValue({
+      agentId: "main",
+      sessionKey: "agent:main:mingle:group:channel-1",
+      mainSessionKey: "agent:main:main",
+    });
+    const sendDm = vi.fn();
+    const postChannel = vi.fn(async () => ({ id: "reply-followup-1" }));
+
+    await dispatchMingleEvent({
+      cfg: { session: {} } as never,
+      account,
+      event: groupFollowupEvent,
+      notifications: [],
+      channelRuntime: runtime as never,
+      client: { sendDm, postChannel },
+    });
+
+    expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
+      cfg: { session: {} },
+      channel: "mingle",
+      accountId: "default",
+      peer: { kind: "group", id: "channel-1" },
+    });
+    expect(capture.context).toMatchObject({
+      from: "mingle:group:channel-1",
+      conversation: { kind: "group", id: "channel-1", label: "Builders" },
+      reply: { to: "mingle:group:builders" },
+      extra: { MingleEventId: "evt-followup-1", MingleMessageId: "group-msg-2" },
+    });
+    expect(postChannel).toHaveBeenCalledWith(
+      "builders",
+      "follow-up reply",
+      "mingle-reply:evt-followup-1:0",
     );
     expect(sendDm).not.toHaveBeenCalled();
   });

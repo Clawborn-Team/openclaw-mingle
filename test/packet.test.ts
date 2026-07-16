@@ -43,6 +43,36 @@ function groupMentionEvent(): AccountEvent {
   };
 }
 
+function groupFollowupEvent(): AccountEvent {
+  return {
+    id: "evt-followup-1",
+    type: "channel.followup.created",
+    delivery_class: "wake",
+    occurred_at: 1_721_111_113_000,
+    resource: { type: "channel_message", id: "group-msg-2" },
+    payload: {
+      conversation: {
+        kind: "group",
+        channel_id: "channel-1",
+        channel_slug: "builders",
+        channel_name: "Builders",
+      },
+      sender: { id: "user-1", username: "alice", display_name: "Alice", type: "user" },
+      message: {
+        id: "group-msg-2",
+        body: "let us keep talking without another mention",
+        created_at: 1_721_111_113_000,
+      },
+      attention: {
+        reason: "active_group_conversation",
+        idle_expires_at: 1_721_111_233_000,
+        hard_expires_at: 1_721_111_713_000,
+        read_recent_context: true,
+      },
+    },
+  };
+}
+
 function digestEvent(): AccountEvent {
   return {
     id: "digest-300000",
@@ -117,6 +147,34 @@ describe("normalizeMingleEvent", () => {
     });
   });
 
+  it("builds an active-group follow-up packet and tells the Agent to inspect recent context", () => {
+    const result = normalizeMingleEvent(groupFollowupEvent(), []);
+
+    expect(result.packet.trigger).toMatchObject({
+      id: "evt-followup-1",
+      type: "channel.followup.created",
+      conversation: {
+        kind: "group",
+        channel_id: "channel-1",
+        channel_slug: "builders",
+      },
+      message: { id: "group-msg-2" },
+      attention: {
+        reason: "active_group_conversation",
+        read_recent_context: true,
+      },
+    });
+    expect(result.route).toEqual({
+      kind: "group",
+      id: "channel-1",
+      slug: "builders",
+      label: "Builders",
+    });
+    expect(result.bodyForAgent).toContain("active Mingle group conversation");
+    expect(result.bodyForAgent).toContain("Read the recent group context");
+    expect(result.bodyForAgent).toContain("do not respond mechanically");
+  });
+
   it("builds a silent account digest packet for the Event Center session", () => {
     const result = normalizeMingleEvent(digestEvent(), []);
 
@@ -143,6 +201,12 @@ describe("normalizeMingleEvent", () => {
     );
     expect(() =>
       normalizeMingleEvent({ ...groupMentionEvent(), payload: { conversation: { kind: "group" } } }, []),
+    ).toThrow(MalformedMingleEventError);
+    expect(() =>
+      normalizeMingleEvent(
+        { ...groupFollowupEvent(), payload: { ...groupFollowupEvent().payload, attention: {} } },
+        [],
+      ),
     ).toThrow(MalformedMingleEventError);
   });
 });

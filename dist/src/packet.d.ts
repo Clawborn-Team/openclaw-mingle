@@ -21,7 +21,7 @@ declare const DirectPayloadSchema: z.ZodObject<{
         created_at: z.ZodNumber;
     }, z.core.$strip>;
 }, z.core.$strip>;
-declare const GroupPayloadSchema: z.ZodObject<{
+declare const GroupMentionPayloadSchema: z.ZodObject<{
     conversation: z.ZodObject<{
         kind: z.ZodLiteral<"group">;
         channel_id: z.ZodString;
@@ -44,6 +44,34 @@ declare const GroupPayloadSchema: z.ZodObject<{
     }, z.core.$strip>;
     mentioned_username: z.ZodString;
 }, z.core.$strip>;
+declare const GroupFollowupPayloadSchema: z.ZodObject<{
+    conversation: z.ZodObject<{
+        kind: z.ZodLiteral<"group">;
+        channel_id: z.ZodString;
+        channel_slug: z.ZodString;
+        channel_name: z.ZodString;
+    }, z.core.$strip>;
+    sender: z.ZodObject<{
+        id: z.ZodString;
+        username: z.ZodString;
+        display_name: z.ZodOptional<z.ZodString>;
+        type: z.ZodEnum<{
+            user: "user";
+            agent: "agent";
+        }>;
+    }, z.core.$strip>;
+    message: z.ZodObject<{
+        id: z.ZodString;
+        body: z.ZodString;
+        created_at: z.ZodNumber;
+    }, z.core.$strip>;
+    attention: z.ZodObject<{
+        reason: z.ZodLiteral<"active_group_conversation">;
+        idle_expires_at: z.ZodNumber;
+        hard_expires_at: z.ZodNumber;
+        read_recent_context: z.ZodLiteral<true>;
+    }, z.core.$strip>;
+}, z.core.$strip>;
 declare const DigestPayloadSchema: z.ZodObject<{
     interval_ms: z.ZodNumber;
 }, z.core.$strip>;
@@ -56,7 +84,8 @@ export declare class MalformedMingleEventError extends Error {
     constructor(eventId: string);
 }
 type DirectPayload = z.infer<typeof DirectPayloadSchema>;
-type GroupPayload = z.infer<typeof GroupPayloadSchema>;
+type GroupMentionPayload = z.infer<typeof GroupMentionPayloadSchema>;
+type GroupFollowupPayload = z.infer<typeof GroupFollowupPayloadSchema>;
 type DigestPayload = z.infer<typeof DigestPayloadSchema>;
 type MingleTrigger = {
     id: string;
@@ -69,9 +98,17 @@ type MingleTrigger = {
     id: string;
     type: "channel.mention.created";
     occurred_at: number;
-    conversation: GroupPayload["conversation"];
-    sender: GroupPayload["sender"];
-    message: GroupPayload["message"];
+    conversation: GroupMentionPayload["conversation"];
+    sender: GroupMentionPayload["sender"];
+    message: GroupMentionPayload["message"];
+} | {
+    id: string;
+    type: "channel.followup.created";
+    occurred_at: number;
+    conversation: GroupFollowupPayload["conversation"];
+    sender: GroupFollowupPayload["sender"];
+    message: GroupFollowupPayload["message"];
+    attention: GroupFollowupPayload["attention"];
 } | {
     id: string;
     type: "account.digest";

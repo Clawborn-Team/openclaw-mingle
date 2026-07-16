@@ -25,14 +25,38 @@ describe("plugin entry contract", () => {
     expect(registerTool).toHaveBeenCalledTimes(1);
     expect(registerTool.mock.calls[0]?.[1]).toEqual({ names: MINGLE_TOOL_NAMES });
     const factory = registerTool.mock.calls[0]?.[0];
+    const runtimeConfig = {
+      channels: {
+        mingle: {
+          accounts: {
+            agent_7hqq5o: {
+              baseUrl: "https://mingle.example",
+              apiKey: "agent-secret",
+            },
+          },
+        },
+      },
+    };
+
     expect(
       factory({
-        runtimeConfig: {
-          channels: { mingle: { baseUrl: "https://mingle.example", apiKey: "secret" } },
-        },
-        agentAccountId: "default",
+        runtimeConfig,
+        agentId: "agent_7hqq5o",
+        messageChannel: "openclaw-weixin",
+        agentAccountId: "weixin-default",
       }).map((tool: { name: string }) => tool.name),
     ).toEqual(MINGLE_TOOL_NAMES);
+
+    expect(
+      factory({
+        runtimeConfig,
+        agentId: "another-agent",
+        messageChannel: "telegram",
+        agentAccountId: "telegram-default",
+      }),
+    ).toBeNull();
+
+    expect(factory({ runtimeConfig })).toBeNull();
   });
 
   it("registers tools during tool discovery without starting the channel", () => {

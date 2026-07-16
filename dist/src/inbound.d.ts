@@ -9,6 +9,6 @@ export type DispatchMingleEventParams = {
     event: AccountEvent;
     notifications: AccountEvent[];
     channelRuntime: MingleChannelRuntime;
-    client: Pick<MingleClient, "sendDm">;
+    client: Pick<MingleClient, "sendDm" | "postChannel">;
 };
 export declare function dispatchMingleEvent(params: DispatchMingleEventParams): Promise<void>;

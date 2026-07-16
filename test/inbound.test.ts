@@ -24,6 +24,25 @@ const event: AccountEvent = {
   },
 };
 
+const groupEvent: AccountEvent = {
+  id: "evt-group-1",
+  type: "channel.mention.created",
+  delivery_class: "wake",
+  occurred_at: 456,
+  resource: { type: "channel_message", id: "group-msg-1" },
+  payload: {
+    conversation: {
+      kind: "group",
+      channel_id: "channel-1",
+      channel_slug: "builders",
+      channel_name: "Builders",
+    },
+    sender: { id: "user-1", username: "alice", display_name: "Alice", type: "user" },
+    message: { id: "group-msg-1", body: "@lobster hello", created_at: 456 },
+    mentioned_username: "lobster",
+  },
+};
+
 function runtimeThatDelivers(texts: Array<string | undefined>) {
   const capture: { context?: Record<string, unknown> } = {};
   const runtime = {
@@ -60,6 +79,7 @@ describe("dispatchMingleEvent", () => {
   it("routes a DM to a stable direct session and sends replies with stable idempotency keys", async () => {
     const { runtime, capture } = runtimeThatDelivers(["first", "second"]);
     const sendDm = vi.fn(async () => ({ id: "reply-1" }));
+    const postChannel = vi.fn(async () => ({ id: "unused" }));
 
     await dispatchMingleEvent({
       cfg: { session: {} } as never,
@@ -67,7 +87,7 @@ describe("dispatchMingleEvent", () => {
       event,
       notifications: [],
       channelRuntime: runtime as never,
-      client: { sendDm },
+      client: { sendDm, postChannel },
     });
 
     expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
@@ -92,9 +112,49 @@ describe("dispatchMingleEvent", () => {
     expect(sendDm).toHaveBeenNthCalledWith(2, "acc-b", "second", "mingle-reply:evt-1:1");
   });
 
+  it("routes a group mention to a stable group session and posts replies to the source group", async () => {
+    const { runtime, capture } = runtimeThatDelivers(["group reply"]);
+    runtime.routing.resolveAgentRoute.mockReturnValue({
+      agentId: "main",
+      sessionKey: "agent:main:mingle:group:channel-1",
+      mainSessionKey: "agent:main:main",
+    });
+    const sendDm = vi.fn();
+    const postChannel = vi.fn(async () => ({ id: "reply-group-1" }));
+
+    await dispatchMingleEvent({
+      cfg: { session: {} } as never,
+      account,
+      event: groupEvent,
+      notifications: [],
+      channelRuntime: runtime as never,
+      client: { sendDm, postChannel },
+    });
+
+    expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
+      cfg: { session: {} },
+      channel: "mingle",
+      accountId: "default",
+      peer: { kind: "group", id: "channel-1" },
+    });
+    expect(capture.context).toMatchObject({
+      from: "mingle:group:channel-1",
+      conversation: { kind: "group", id: "channel-1", label: "Builders" },
+      reply: { to: "mingle:group:builders" },
+      extra: { MingleEventId: "evt-group-1", MingleMessageId: "group-msg-1" },
+    });
+    expect(postChannel).toHaveBeenCalledWith(
+      "builders",
+      "group reply",
+      "mingle-reply:evt-group-1:0",
+    );
+    expect(sendDm).not.toHaveBeenCalled();
+  });
+
   it("accepts a no-text final without creating a visible Mingle message", async () => {
     const { runtime } = runtimeThatDelivers([undefined, ""]);
     const sendDm = vi.fn();
+    const postChannel = vi.fn();
 
     await dispatchMingleEvent({
       cfg: {} as never,
@@ -102,9 +162,10 @@ describe("dispatchMingleEvent", () => {
       event,
       notifications: [],
       channelRuntime: runtime as never,
-      client: { sendDm },
+      client: { sendDm, postChannel },
     });
 
     expect(sendDm).not.toHaveBeenCalled();
+    expect(postChannel).not.toHaveBeenCalled();
   });
 });

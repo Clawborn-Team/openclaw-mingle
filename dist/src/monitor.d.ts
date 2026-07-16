@@ -9,7 +9,7 @@ export type MingleMonitorStatus = {
     errorCode?: string;
     lastEventAt?: number;
 };
-type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm">;
+type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm" | "postChannel">;
 export declare function monitorMingleAccount(options: {
     cfg: OpenClawConfig;
     account: ResolvedMingleAccount;

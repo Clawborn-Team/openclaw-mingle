@@ -2,13 +2,19 @@ import { normalizeMingleEvent } from "./packet.js";
 const CHANNEL_ID = "mingle";
 export async function dispatchMingleEvent(params) {
     const normalized = normalizeMingleEvent(params.event, params.notifications);
-    const route = params.channelRuntime.routing.resolveAgentRoute({
+    const agentRoute = params.channelRuntime.routing.resolveAgentRoute({
         cfg: params.cfg,
         channel: CHANNEL_ID,
         accountId: params.account.accountId,
-        peer: { kind: "direct", id: normalized.peerId },
+        peer: { kind: normalized.route.kind, id: normalized.route.id },
     });
-    const sessionKey = route.sessionKey;
+    const sessionKey = agentRoute.sessionKey;
+    const from = normalized.route.kind === "group"
+        ? `mingle:group:${normalized.route.id}`
+        : `mingle:${normalized.route.id}`;
+    const replyTo = normalized.route.kind === "group"
+        ? `mingle:group:${normalized.route.slug}`
+        : `mingle:${normalized.route.id}`;
     let replyIndex = 0;
     await params.channelRuntime.inbound.run({
         channel: CHANNEL_ID,
@@ -28,7 +34,7 @@ export async function dispatchMingleEvent(params) {
                     channel: CHANNEL_ID,
                     accountId: params.account.accountId,
                     timestamp: input.timestamp ?? params.event.occurred_at,
-                    from: `mingle:${normalized.peerId}`,
+                    from,
                     sender: {
                         id: normalized.packet.trigger.sender.id,
                         name: normalized.packet.trigger.sender.display_name ||
@@ -36,17 +42,17 @@ export async function dispatchMingleEvent(params) {
                         username: normalized.packet.trigger.sender.username,
                     },
                     conversation: {
-                        kind: "direct",
-                        id: normalized.peerId,
-                        label: normalized.peerLabel,
+                        kind: normalized.route.kind,
+                        id: normalized.route.id,
+                        label: normalized.route.label,
                     },
                     route: {
-                        agentId: route.agentId,
+                        agentId: agentRoute.agentId,
                         accountId: params.account.accountId,
                         routeSessionKey: sessionKey,
                         dispatchSessionKey: sessionKey,
                     },
-                    reply: { to: `mingle:${normalized.peerId}` },
+                    reply: { to: replyTo },
                     message: {
                         rawBody: input.rawText,
                         commandBody: input.textForCommands ?? "",
@@ -57,25 +63,31 @@ export async function dispatchMingleEvent(params) {
                         MingleMessageId: normalized.packet.trigger.message.id,
                     },
                 });
-                const storePath = params.channelRuntime.session.resolveStorePath(params.cfg.session?.store, { agentId: route.agentId });
+                const storePath = params.channelRuntime.session.resolveStorePath(params.cfg.session?.store, { agentId: agentRoute.agentId });
                 return {
                     cfg: params.cfg,
                     channel: CHANNEL_ID,
                     accountId: params.account.accountId,
-                    agentId: route.agentId,
+                    agentId: agentRoute.agentId,
                     routeSessionKey: sessionKey,
                     storePath,
                     ctxPayload,
                     recordInboundSession: params.channelRuntime.session.recordInboundSession,
                     dispatchReplyWithBufferedBlockDispatcher: params.channelRuntime.reply.dispatchReplyWithBufferedBlockDispatcher,
                     delivery: {
-                        durable: () => ({ to: normalized.peerId }),
+                        durable: () => ({ to: replyTo }),
                         deliver: async (payload) => {
                             const text = payload.text?.trim();
                             if (!text)
                                 return { visibleReplySent: false };
                             const index = replyIndex++;
-                            await params.client.sendDm(normalized.peerId, text, `mingle-reply:${params.event.id}:${index}`);
+                            const idempotencyKey = `mingle-reply:${params.event.id}:${index}`;
+                            if (normalized.route.kind === "group") {
+                                await params.client.postChannel(normalized.route.slug, text, idempotencyKey);
+                            }
+                            else {
+                                await params.client.sendDm(normalized.route.id, text, idempotencyKey);
+                            }
                             return { visibleReplySent: true };
                         },
                     },

@@ -38,7 +38,7 @@ export declare class MingleClient {
         after?: number;
         limit?: number;
     }): Promise<unknown>;
-    postChannel(slug: string, body: string): Promise<unknown>;
+    postChannel(slug: string, body: string, idempotencyKey?: string): Promise<unknown>;
     findMatches(limit?: number): Promise<unknown>;
     proposeIntroduction(params: {
         toAgent: string;

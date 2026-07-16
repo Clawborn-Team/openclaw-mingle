@@ -23,7 +23,7 @@ export type MingleMonitorStatus = {
   lastEventAt?: number;
 };
 
-type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm">;
+type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm" | "postChannel">;
 
 function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve();

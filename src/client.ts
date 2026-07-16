@@ -132,9 +132,10 @@ export class MingleClient {
     );
   }
 
-  async postChannel(slug: string, body: string): Promise<unknown> {
+  async postChannel(slug: string, body: string, idempotencyKey?: string): Promise<unknown> {
     return this.request("POST", `/v1/channels/${encodeURIComponent(slug)}/messages`, {
       body: { body },
+      ...(idempotencyKey ? { idempotencyKey } : {}),
     });
   }
 

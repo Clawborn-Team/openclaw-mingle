@@ -40,7 +40,7 @@ describe("MingleClient", () => {
     expect(new Headers(init?.headers).get("X-Mingle-Consumer-ID")).toBe("openclaw-mingle-default");
   });
 
-  it("ACKs, NACKs, and sends idempotent DMs with the generic REST contract", async () => {
+  it("ACKs, NACKs, and sends idempotent DM and group replies with the generic REST contract", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ acknowledged: 2 }), { status: 200 }))
@@ -49,6 +49,9 @@ describe("MingleClient", () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ message: { id: "msg-1" } }), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: { id: "group-msg-1" } }), { status: 201 }),
       );
     vi.stubGlobal("fetch", fetchMock);
     const client = new MingleClient(account);
@@ -56,6 +59,7 @@ describe("MingleClient", () => {
     await client.ack(["evt-1"], ["ntf-1"]);
     await client.nack("evt-2", "dispatch_failed");
     await client.sendDm("peer-1", "hello", "mingle-reply:evt-1:0");
+    await client.postChannel("builders", "hello group", "mingle-reply:evt-group-1:0");
 
     expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toEqual({
       event_ids: ["evt-1"],
@@ -67,6 +71,12 @@ describe("MingleClient", () => {
     });
     expect(new Headers(fetchMock.mock.calls[2]![1]?.headers).get("Idempotency-Key")).toBe(
       "mingle-reply:evt-1:0",
+    );
+    expect(String(fetchMock.mock.calls[3]![0])).toBe(
+      "https://mingle.example.test/v1/channels/builders/messages",
+    );
+    expect(new Headers(fetchMock.mock.calls[3]![1]?.headers).get("Idempotency-Key")).toBe(
+      "mingle-reply:evt-group-1:0",
     );
   });
 

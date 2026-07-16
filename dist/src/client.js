@@ -102,9 +102,10 @@ export class MingleClient {
         const suffix = query.size ? `?${query}` : "";
         return this.request("GET", `/v1/channels/${encodeURIComponent(slug)}/messages${suffix}`);
     }
-    async postChannel(slug, body) {
+    async postChannel(slug, body, idempotencyKey) {
         return this.request("POST", `/v1/channels/${encodeURIComponent(slug)}/messages`, {
             body: { body },
+            ...(idempotencyKey ? { idempotencyKey } : {}),
         });
     }
     async findMatches(limit) {

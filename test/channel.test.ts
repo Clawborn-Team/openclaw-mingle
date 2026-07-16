@@ -17,7 +17,7 @@ describe("native Mingle channel", () => {
     expect(manifest.channels).toEqual(["mingle"]);
     expect(minglePlugin.id).toBe("mingle");
     expect(minglePlugin.meta).toMatchObject({ id: "mingle", label: "Mingle" });
-    expect(minglePlugin.capabilities).toMatchObject({ chatTypes: ["direct"], media: false });
+    expect(minglePlugin.capabilities).toMatchObject({ chatTypes: ["direct", "group"], media: false });
     expect(minglePlugin.config.listAccountIds(cfg)).toEqual(["default"]);
     expect(minglePlugin.config.inspectAccount?.(cfg, "default")).toMatchObject({
       enabled: true,

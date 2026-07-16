@@ -79,6 +79,7 @@ describe("monitorMingleAccount", () => {
       ack: vi.fn(async () => 1),
       nack: vi.fn(async () => undefined),
       sendDm: vi.fn(),
+      postChannel: vi.fn(),
     };
     const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => undefined);
 
@@ -112,6 +113,7 @@ describe("monitorMingleAccount", () => {
       ack: vi.fn(async () => 1),
       nack: vi.fn(),
       sendDm: vi.fn(),
+      postChannel: vi.fn(),
     };
     const dispatch = vi.fn();
 
@@ -147,6 +149,7 @@ describe("monitorMingleAccount", () => {
         .mockResolvedValueOnce(1),
       nack: vi.fn(async () => undefined),
       sendDm: vi.fn(),
+      postChannel: vi.fn(),
     };
     const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => undefined);
 
@@ -180,6 +183,7 @@ describe("monitorMingleAccount", () => {
       ack: vi.fn(async () => 1),
       nack: vi.fn(async () => undefined),
       sendDm: vi.fn(),
+      postChannel: vi.fn(),
     };
     let dispatchCount = 0;
     const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => {
@@ -213,6 +217,7 @@ describe("monitorMingleAccount", () => {
       ack: vi.fn(),
       nack: vi.fn(),
       sendDm: vi.fn(),
+      postChannel: vi.fn(),
     };
     const statuses: string[] = [];
 
@@ -245,6 +250,7 @@ describe("monitorMingleAccount", () => {
       ack: vi.fn(),
       nack: vi.fn(),
       sendDm: vi.fn(),
+      postChannel: vi.fn(),
     };
 
     await monitorMingleAccount({

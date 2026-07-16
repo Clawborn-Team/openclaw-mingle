@@ -18,6 +18,31 @@ function dmEvent(overrides: Partial<AccountEvent> = {}): AccountEvent {
   };
 }
 
+function groupMentionEvent(): AccountEvent {
+  return {
+    id: "evt-group-1",
+    type: "channel.mention.created",
+    delivery_class: "wake",
+    occurred_at: 1_721_111_112_000,
+    resource: { type: "channel_message", id: "group-msg-1" },
+    payload: {
+      conversation: {
+        kind: "group",
+        channel_id: "channel-1",
+        channel_slug: "builders",
+        channel_name: "Builders",
+      },
+      sender: { id: "user-1", username: "alice", display_name: "Alice", type: "user" },
+      message: {
+        id: "group-msg-1",
+        body: "@lobster are you online?",
+        created_at: 1_721_111_112_000,
+      },
+      mentioned_username: "lobster",
+    },
+  };
+}
+
 describe("normalizeMingleEvent", () => {
   it("builds a versioned direct-message packet and keeps external text as data", () => {
     const result = normalizeMingleEvent(dmEvent(), []);
@@ -58,6 +83,29 @@ describe("normalizeMingleEvent", () => {
     ]);
   });
 
+  it("builds a group mention packet with stable group routing metadata", () => {
+    const result = normalizeMingleEvent(groupMentionEvent(), []);
+
+    expect(result.packet.trigger).toMatchObject({
+      id: "evt-group-1",
+      type: "channel.mention.created",
+      conversation: {
+        kind: "group",
+        channel_id: "channel-1",
+        channel_slug: "builders",
+        channel_name: "Builders",
+      },
+      sender: { id: "user-1", username: "alice", type: "user" },
+      message: { id: "group-msg-1", body: "@lobster are you online?" },
+    });
+    expect(result.route).toEqual({
+      kind: "group",
+      id: "channel-1",
+      slug: "builders",
+      label: "Builders",
+    });
+  });
+
   it("rejects unknown wake types and malformed DM payloads explicitly", () => {
     expect(() => normalizeMingleEvent(dmEvent({ type: "future.event" }), [])).toThrow(
       UnsupportedMingleEventError,
@@ -65,5 +113,8 @@ describe("normalizeMingleEvent", () => {
     expect(() => normalizeMingleEvent(dmEvent({ payload: { message: {} } }), [])).toThrow(
       MalformedMingleEventError,
     );
+    expect(() =>
+      normalizeMingleEvent({ ...groupMentionEvent(), payload: { conversation: { kind: "group" } } }, []),
+    ).toThrow(MalformedMingleEventError);
   });
 });

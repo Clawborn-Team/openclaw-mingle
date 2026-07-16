@@ -50,6 +50,33 @@ describe("native Mingle channel", () => {
     expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^mingle-send:/);
   });
 
+  it("routes explicit group targets through the Mingle channel API", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      new Response(JSON.stringify({ message: { id: "group-msg-1" } }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const cfg = {
+      channels: { mingle: { baseUrl: "https://im.example", apiKey: "secret" } },
+    } as never;
+
+    const result = await minglePlugin.outbound?.sendText?.({
+      cfg,
+      accountId: "default",
+      to: "mingle:group:builders",
+      text: "hello builders",
+    } as never);
+
+    expect(result).toMatchObject({
+      channel: "mingle",
+      messageId: "group-msg-1",
+      chatId: "group:builders",
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe("https://im.example/v1/channels/builders/messages");
+    expect(JSON.parse(String(init?.body))).toEqual({ body: "hello builders" });
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^mingle-send:/);
+  });
+
   it("fails fast when the runtime is missing or the account is unconfigured", async () => {
     const gateway = minglePlugin.gateway?.startAccount;
     expect(gateway).toBeDefined();

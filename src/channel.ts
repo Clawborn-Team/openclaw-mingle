@@ -21,6 +21,17 @@ function normalizeTarget(target: string): string {
   return trimmed.startsWith("mingle:") ? trimmed.slice("mingle:".length).trim() : trimmed;
 }
 
+function parseTarget(target: string):
+  | { kind: "direct"; id: string }
+  | { kind: "group"; id: string }
+  | null {
+  const normalized = normalizeTarget(target);
+  if (!normalized) return null;
+  if (!normalized.startsWith("group:")) return { kind: "direct", id: normalized };
+  const slug = normalized.slice("group:".length).trim();
+  return slug ? { kind: "group", id: slug } : null;
+}
+
 function applyAccountConfig(params: {
   cfg: OpenClawConfig;
   accountId: string;
@@ -64,18 +75,19 @@ function monitorSnapshot(account: ResolvedMingleAccount, status: MingleMonitorSt
 }
 
 function resolveOutboundSessionRoute(params: ChannelOutboundSessionRouteParams) {
-  const target = normalizeTarget(params.resolvedTarget?.to ?? params.target);
+  const target = parseTarget(params.resolvedTarget?.to ?? params.target);
   if (!target) return null;
+  const id = target.kind === "group" ? `group:${target.id}` : target.id;
   return buildChannelOutboundSessionRoute({
     cfg: params.cfg,
     agentId: params.agentId,
     channel: CHANNEL_ID,
     ...(params.accountId !== undefined ? { accountId: params.accountId } : {}),
     recipientSessionExact: true,
-    peer: { kind: "direct", id: target },
-    chatType: "direct",
-    from: `mingle:${target}`,
-    to: `mingle:${target}`,
+    peer: { kind: target.kind, id: target.id },
+    chatType: target.kind,
+    from: `mingle:${id}`,
+    to: `mingle:${id}`,
   });
 }
 
@@ -176,20 +188,34 @@ export const minglePlugin: ChannelPlugin<ResolvedMingleAccount> = createChatChan
   outbound: {
     deliveryMode: "gateway",
     resolveTarget: ({ to }) => {
-      const target = normalizeTarget(to ?? "");
+      const parsed = parseTarget(to ?? "");
+      const target = parsed ? (parsed.kind === "group" ? `group:${parsed.id}` : parsed.id) : "";
       return target
         ? { ok: true, to: target }
         : { ok: false, error: new Error("Mingle target is required.") };
     },
     sendText: async ({ cfg, accountId, to, text }) => {
       const account = resolveMingleAccount(cfg, accountId);
-      const target = normalizeTarget(to);
-      const result = await new MingleClient(account).sendDm(
-        target,
-        text,
-        `mingle-send:${randomUUID()}`,
-      );
-      return { channel: CHANNEL_ID, messageId: result.id, chatId: target };
+      const target = parseTarget(to);
+      if (!target) throw new Error("Mingle target is required.");
+      const idempotencyKey = `mingle-send:${randomUUID()}`;
+      if (target.kind === "group") {
+        const result = (await new MingleClient(account).postChannel(
+          target.id,
+          text,
+          idempotencyKey,
+        )) as { message?: { id?: unknown } };
+        if (typeof result.message?.id !== "string") {
+          throw new Error("Invalid channel-message response.");
+        }
+        return {
+          channel: CHANNEL_ID,
+          messageId: result.message.id,
+          chatId: `group:${target.id}`,
+        };
+      }
+      const result = await new MingleClient(account).sendDm(target.id, text, idempotencyKey);
+      return { channel: CHANNEL_ID, messageId: result.id, chatId: target.id };
     },
   },
 });

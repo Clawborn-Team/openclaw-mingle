@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MingleApiError, MingleClient, redactMingleError } from "../src/client.js";
+import {
+  MingleApiError,
+  MingleClient,
+  MingleTransportError,
+  redactMingleError,
+} from "../src/client.js";
 
 const account = {
   accountId: "default",
@@ -10,7 +15,10 @@ const account = {
   consumerId: "openclaw-mingle-default",
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("MingleClient", () => {
   it("polls with auth, consumer id, cursor, wait, and signal", async () => {
@@ -129,6 +137,60 @@ describe("MingleClient", () => {
     await expect(new MingleClient(account).poll({ waitMs: 0 })).rejects.toThrow(
       "Invalid Event Center response",
     );
+  });
+
+  it("aborts a stuck immediate poll at its client deadline", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit): Promise<Response> =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("request aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = new MingleClient(account).poll({ waitMs: 0 }).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(await Promise.race([result, Promise.resolve("pending")])).toBe("pending");
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(result).resolves.toMatchObject({
+      name: "MingleTransportError",
+      code: "request_timeout",
+      retryable: true,
+    });
+    expect(await result).toBeInstanceOf(MingleTransportError);
+  });
+
+  it("preserves Gateway cancellation instead of classifying it as a request timeout", async () => {
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (_input: string | URL | Request, init?: RequestInit): Promise<Response> =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("gateway stopped", "AbortError")),
+              { once: true },
+            );
+          }),
+      ),
+    );
+
+    const result = new MingleClient(account)
+      .poll({ waitMs: 25_000, signal: controller.signal })
+      .catch((error) => error);
+    controller.abort();
+
+    const error = await result;
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(MingleTransportError);
+    expect(error).toMatchObject({ name: "AbortError" });
   });
 
   it("maps the Mingle social surface to the public REST API", async () => {

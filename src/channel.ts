@@ -70,6 +70,7 @@ function monitorSnapshot(account: ResolvedMingleAccount, status: MingleMonitorSt
     statusState: status.state,
     terminalDisconnect: terminal,
     ...(status.errorCode ? { lastError: status.errorCode } : {}),
+    ...(status.lastPollAt ? { lastPollAt: status.lastPollAt } : {}),
     ...(status.lastEventAt ? { lastEventAt: status.lastEventAt, lastInboundAt: status.lastEventAt } : {}),
   };
 }

@@ -1,8 +1,8 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MingleApiError } from "../src/client.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MingleApiError, MingleTransportError } from "../src/client.js";
 import type { DispatchMingleEventParams } from "../src/inbound.js";
 import { monitorMingleAccount } from "../src/monitor.js";
 import { DeliveryStateStore } from "../src/state.js";
@@ -63,6 +63,10 @@ describe("monitorMingleAccount", () => {
       stateDir,
     });
     controller = new AbortController();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("saves cursor, dispatches serially, attaches notifications once, marks accepted, then ACKs", async () => {
@@ -243,8 +247,10 @@ describe("monitorMingleAccount", () => {
         .mockRejectedValueOnce(apiError(429, "rate_limited", 7_000))
         .mockRejectedValueOnce(apiError(503, "unavailable"))
         .mockImplementationOnce(async ({ signal }: { signal?: AbortSignal }) => {
-          expect(signal).toBe(controller.signal);
+          expect(signal).toBeInstanceOf(AbortSignal);
+          expect(signal).not.toBe(controller.signal);
           controller.abort();
+          expect(signal?.aborted).toBe(true);
           return packet([]);
         }),
       ack: vi.fn(),
@@ -268,6 +274,101 @@ describe("monitorMingleAccount", () => {
 
     expect(sleeps).toEqual([7_000, 1_000]);
     expect(client.poll).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries a typed request timeout and exposes the transport error code", async () => {
+    const statuses: Array<{ state: string; errorCode?: string }> = [];
+    const client = {
+      poll: vi
+        .fn()
+        .mockRejectedValueOnce(
+          new MingleTransportError({
+            code: "request_timeout",
+            message: "request timed out",
+            retryable: true,
+          }),
+        )
+        .mockImplementationOnce(async () => {
+          controller.abort();
+          return packet([]);
+        }),
+      ack: vi.fn(),
+      nack: vi.fn(),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+
+    await monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      abortSignal: controller.signal,
+      setStatus: (status) => statuses.push(status),
+      sleep: async () => undefined,
+      random: () => 0,
+    });
+
+    expect(statuses).toContainEqual({ state: "reconnecting", errorCode: "request_timeout" });
+    expect(client.poll).toHaveBeenCalledTimes(2);
+  });
+
+  it("breaks a non-completing poll with the monitor watchdog", async () => {
+    const statuses: Array<{ state: string; errorCode?: string }> = [];
+    const client = {
+      poll: vi.fn(async () => new Promise<EventCenterPacket>(() => undefined)),
+      ack: vi.fn(),
+      nack: vi.fn(),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+
+    const running = monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      abortSignal: controller.signal,
+      setStatus: (status) => statuses.push(status),
+      pollingStallThresholdMs: 10,
+      sleep: async () => {
+        controller.abort();
+      },
+    });
+    await running;
+
+    expect(statuses).toContainEqual({ state: "reconnecting", errorCode: "polling_stale" });
+    expect(statuses.at(-1)).toEqual({ state: "stopped" });
+  });
+
+  it("records completed empty polls separately from dispatched events", async () => {
+    const statuses: Array<{ state: string; lastPollAt?: number; lastEventAt?: number }> = [];
+    const client = {
+      poll: vi.fn(async () => {
+        controller.abort();
+        return packet([]);
+      }),
+      ack: vi.fn(),
+      nack: vi.fn(),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+
+    await monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      abortSignal: controller.signal,
+      setStatus: (status) => statuses.push(status),
+      now: () => 42,
+    });
+
+    expect(statuses).toContainEqual({ state: "connected", lastPollAt: 42 });
+    expect(statuses.some((status) => status.lastEventAt !== undefined)).toBe(false);
   });
 
   it("wakes a quiet account on the digest deadline and ACKs attached notifications once", async () => {

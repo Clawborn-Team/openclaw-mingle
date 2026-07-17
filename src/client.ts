@@ -19,6 +19,9 @@ const EventCenterPacketSchema = z.object({
 
 type ErrorBody = { error?: { code?: string; message?: string } };
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const POLL_TIMEOUT_GRACE_MS = 10_000;
+
 export class MingleApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -38,6 +41,18 @@ export class MingleApiError extends Error {
     this.code = params.code;
     this.retryable = params.retryable;
     if (params.retryAfterMs !== undefined) this.retryAfterMs = params.retryAfterMs;
+  }
+}
+
+export class MingleTransportError extends Error {
+  readonly code: string;
+  readonly retryable: boolean;
+
+  constructor(params: { code: string; message: string; retryable: boolean }) {
+    super(params.message);
+    this.name = "MingleTransportError";
+    this.code = params.code;
+    this.retryable = params.retryable;
   }
 }
 
@@ -61,6 +76,10 @@ export class MingleClient {
     if (params.digest) query.set("digest", "true");
     const value = await this.request("GET", `/v1/event-center/updates?${query}`, {
       consumer: true,
+      timeoutMs:
+        params.waitMs > 0
+          ? params.waitMs + POLL_TIMEOUT_GRACE_MS
+          : DEFAULT_REQUEST_TIMEOUT_MS,
       ...(params.signal ? { signal: params.signal } : {}),
     });
     const parsed = EventCenterPacketSchema.safeParse(value);
@@ -209,6 +228,7 @@ export class MingleClient {
       signal?: AbortSignal;
       consumer?: boolean;
       idempotencyKey?: string;
+      timeoutMs?: number;
     } = {},
   ): Promise<unknown> {
     const headers = new Headers({
@@ -220,23 +240,54 @@ export class MingleClient {
     if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
     const init: RequestInit = { method, headers };
     if (options.body !== undefined) init.body = JSON.stringify(options.body);
-    if (options.signal !== undefined) init.signal = options.signal;
-
-    const response = await fetch(`${this.account.baseUrl}${path}`, init);
-    const value = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = value as ErrorBody;
-      const retryAfterSeconds = Number(response.headers.get("Retry-After"));
-      throw new MingleApiError({
-        status: response.status,
-        code: error.error?.code ?? `http_${response.status}`,
-        message: error.error?.message ?? `Mingle request failed with HTTP ${response.status}.`,
-        retryable: response.status === 429 || response.status >= 500,
-        ...(Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-          ? { retryAfterMs: retryAfterSeconds * 1_000 }
-          : {}),
-      });
+    const controller = new AbortController();
+    let externallyAborted = options.signal?.aborted === true;
+    let timedOut = false;
+    const forwardExternalAbort = () => {
+      externallyAborted = true;
+      controller.abort(options.signal?.reason);
+    };
+    if (externallyAborted) {
+      throw new DOMException("Gateway stopped", "AbortError");
     }
-    return value;
+    options.signal?.addEventListener("abort", forwardExternalAbort, { once: true });
+    const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    timeout.unref?.();
+    init.signal = controller.signal;
+
+    try {
+      const response = await fetch(`${this.account.baseUrl}${path}`, init);
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = value as ErrorBody;
+        const retryAfterSeconds = Number(response.headers.get("Retry-After"));
+        throw new MingleApiError({
+          status: response.status,
+          code: error.error?.code ?? `http_${response.status}`,
+          message: error.error?.message ?? `Mingle request failed with HTTP ${response.status}.`,
+          retryable: response.status === 429 || response.status >= 500,
+          ...(Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+            ? { retryAfterMs: retryAfterSeconds * 1_000 }
+            : {}),
+        });
+      }
+      return value;
+    } catch (error) {
+      if (timedOut && !externallyAborted) {
+        throw new MingleTransportError({
+          code: "request_timeout",
+          message: `Mingle request timed out after ${timeoutMs}ms.`,
+          retryable: true,
+        });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", forwardExternalAbort);
+    }
   }
 }

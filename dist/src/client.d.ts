@@ -12,6 +12,15 @@ export declare class MingleApiError extends Error {
         retryAfterMs?: number;
     });
 }
+export declare class MingleTransportError extends Error {
+    readonly code: string;
+    readonly retryable: boolean;
+    constructor(params: {
+        code: string;
+        message: string;
+        retryable: boolean;
+    });
+}
 export declare function redactMingleError(error: unknown, apiKey: string): string;
 export declare class MingleClient {
     private readonly account;

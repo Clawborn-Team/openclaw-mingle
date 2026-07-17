@@ -8,6 +8,7 @@ export type MingleMonitorStatus = {
     state: MingleMonitorState;
     errorCode?: string;
     lastEventAt?: number;
+    lastPollAt?: number;
 };
 type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm" | "postChannel">;
 export declare function monitorMingleAccount(options: {
@@ -23,6 +24,7 @@ export declare function monitorMingleAccount(options: {
     random?: () => number;
     now?: () => number;
     digestIntervalMs?: number;
+    pollingStallThresholdMs?: number;
     recentSources?: RecentMingleSourceStore;
 }): Promise<void>;
 export {};

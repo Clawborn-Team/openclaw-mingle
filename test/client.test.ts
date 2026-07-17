@@ -47,7 +47,7 @@ describe("MingleClient", () => {
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer mingle_sk_top_secret");
     expect(new Headers(init?.headers).get("X-Mingle-Consumer-ID")).toBe("openclaw-mingle-default");
     expect(new Headers(init?.headers).get("X-Mingle-Runtime")).toBe("openclaw-mingle");
-    expect(new Headers(init?.headers).get("X-Mingle-Runtime-Version")).toBe("0.6.1");
+    expect(new Headers(init?.headers).get("X-Mingle-Runtime-Version")).toBe("0.6.2");
     expect(new Headers(init?.headers).get("X-Mingle-Runtime-Capabilities")).toBe(
       "plugin-update-v1",
     );

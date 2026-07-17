@@ -81,7 +81,7 @@ function isRecentSource(value) {
     const source = value;
     const sender = source.sender;
     return (typeof source.target === "string" &&
-        (source.kind === "direct" || source.kind === "group") &&
+        (source.kind === "direct" || source.kind === "group" || source.kind === "plaza") &&
         typeof source.label === "string" &&
         typeof sender?.id === "string" &&
         typeof sender.username === "string" &&

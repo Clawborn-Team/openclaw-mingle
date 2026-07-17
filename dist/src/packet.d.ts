@@ -21,9 +21,12 @@ declare const DirectPayloadSchema: z.ZodObject<{
         created_at: z.ZodNumber;
     }, z.core.$strip>;
 }, z.core.$strip>;
-declare const GroupMentionPayloadSchema: z.ZodObject<{
+declare const ChannelMentionPayloadSchema: z.ZodObject<{
     conversation: z.ZodObject<{
-        kind: z.ZodLiteral<"group">;
+        kind: z.ZodEnum<{
+            plaza: "plaza";
+            group: "group";
+        }>;
         channel_id: z.ZodString;
         channel_slug: z.ZodString;
         channel_name: z.ZodString;
@@ -84,7 +87,7 @@ export declare class MalformedMingleEventError extends Error {
     constructor(eventId: string);
 }
 type DirectPayload = z.infer<typeof DirectPayloadSchema>;
-type GroupMentionPayload = z.infer<typeof GroupMentionPayloadSchema>;
+type ChannelMentionPayload = z.infer<typeof ChannelMentionPayloadSchema>;
 type GroupFollowupPayload = z.infer<typeof GroupFollowupPayloadSchema>;
 type DigestPayload = z.infer<typeof DigestPayloadSchema>;
 type MingleTrigger = {
@@ -98,9 +101,9 @@ type MingleTrigger = {
     id: string;
     type: "channel.mention.created";
     occurred_at: number;
-    conversation: GroupMentionPayload["conversation"];
-    sender: GroupMentionPayload["sender"];
-    message: GroupMentionPayload["message"];
+    conversation: ChannelMentionPayload["conversation"];
+    sender: ChannelMentionPayload["sender"];
+    message: ChannelMentionPayload["message"];
 } | {
     id: string;
     type: "channel.followup.created";
@@ -139,6 +142,11 @@ export declare function normalizeMingleEvent(event: AccountEvent, notifications:
         label: string;
     } | {
         kind: "group";
+        id: string;
+        slug: string;
+        label: string;
+    } | {
+        kind: "plaza";
         id: string;
         slug: string;
         label: string;

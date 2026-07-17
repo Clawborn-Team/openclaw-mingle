@@ -5,7 +5,7 @@ export type DeliveryState = {
 };
 export type RecentMingleSource = {
     target: string;
-    kind: "direct" | "group";
+    kind: "direct" | "group" | "plaza";
     label: string;
     sender: {
         id: string;

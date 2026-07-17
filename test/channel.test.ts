@@ -77,6 +77,32 @@ describe("native Mingle channel", () => {
     expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^mingle-send:/);
   });
 
+  it("routes explicit plaza targets through the Mingle channel API without losing target kind", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      new Response(JSON.stringify({ message: { id: "plaza-msg-1" } }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const cfg = {
+      channels: { mingle: { baseUrl: "https://im.example", apiKey: "secret" } },
+    } as never;
+
+    const result = await minglePlugin.outbound?.sendText?.({
+      cfg,
+      accountId: "default",
+      to: "mingle:plaza:agent-square",
+      text: "hello plaza",
+    } as never);
+
+    expect(result).toMatchObject({
+      channel: "mingle",
+      messageId: "plaza-msg-1",
+      chatId: "plaza:agent-square",
+    });
+    expect(String(fetchMock.mock.calls[0]![0])).toBe(
+      "https://im.example/v1/channels/agent-square/messages",
+    );
+  });
+
   it("fails fast when the runtime is missing or the account is unconfigured", async () => {
     const gateway = minglePlugin.gateway?.startAccount;
     expect(gateway).toBeDefined();

@@ -35,7 +35,15 @@ const GroupBasePayloadSchema = z.object({
   message: MessageSchema,
 });
 
-const GroupMentionPayloadSchema = GroupBasePayloadSchema.extend({
+const ChannelMentionPayloadSchema = z.object({
+  conversation: z.object({
+    kind: z.enum(["group", "plaza"]),
+    channel_id: z.string().min(1),
+    channel_slug: z.string().min(1),
+    channel_name: z.string().min(1),
+  }),
+  sender: SenderSchema,
+  message: MessageSchema,
   mentioned_username: z.string().min(1),
 });
 
@@ -67,7 +75,7 @@ export class MalformedMingleEventError extends Error {
 }
 
 type DirectPayload = z.infer<typeof DirectPayloadSchema>;
-type GroupMentionPayload = z.infer<typeof GroupMentionPayloadSchema>;
+type ChannelMentionPayload = z.infer<typeof ChannelMentionPayloadSchema>;
 type GroupFollowupPayload = z.infer<typeof GroupFollowupPayloadSchema>;
 type DigestPayload = z.infer<typeof DigestPayloadSchema>;
 
@@ -84,9 +92,9 @@ type MingleTrigger =
       id: string;
       type: "channel.mention.created";
       occurred_at: number;
-      conversation: GroupMentionPayload["conversation"];
-      sender: GroupMentionPayload["sender"];
-      message: GroupMentionPayload["message"];
+      conversation: ChannelMentionPayload["conversation"];
+      sender: ChannelMentionPayload["sender"];
+      message: ChannelMentionPayload["message"];
     }
   | {
       id: string;
@@ -126,12 +134,14 @@ export function normalizeMingleEvent(
   route:
     | { kind: "direct"; id: string; label: string }
     | { kind: "group"; id: string; slug: string; label: string }
+    | { kind: "plaza"; id: string; slug: string; label: string }
     | { kind: "event-center"; id: string; label: string };
 } {
   let trigger: MingleTrigger;
   let route:
     | { kind: "direct"; id: string; label: string }
     | { kind: "group"; id: string; slug: string; label: string }
+    | { kind: "plaza"; id: string; slug: string; label: string }
     | { kind: "event-center"; id: string; label: string };
 
   if (event.type === "dm.message.created") {
@@ -153,7 +163,7 @@ export function normalizeMingleEvent(
         payload.conversation.peer_username || payload.sender.display_name || payload.sender.username,
     };
   } else if (event.type === "channel.mention.created") {
-    const parsed = GroupMentionPayloadSchema.safeParse(event.payload);
+    const parsed = ChannelMentionPayloadSchema.safeParse(event.payload);
     if (!parsed.success) throw new MalformedMingleEventError(event.id);
     const payload = parsed.data;
     trigger = {
@@ -165,7 +175,7 @@ export function normalizeMingleEvent(
       message: payload.message,
     };
     route = {
-      kind: "group",
+      kind: payload.conversation.kind,
       id: payload.conversation.channel_id,
       slug: payload.conversation.channel_slug,
       label: payload.conversation.channel_name,
@@ -228,7 +238,13 @@ export function normalizeMingleEvent(
           "You may also choose to do nothing. Do not act merely because an option exists, and avoid repetitive or spammy outreach.",
           "A routine heartbeat response is not delivered to any chat; use a Mingle tool only when you choose a concrete social action.",
         ]
-      : trigger.type === "channel.followup.created"
+      : trigger.type === "channel.mention.created" && trigger.conversation.kind === "plaza"
+        ? [
+            "You were explicitly mentioned in a public Mingle plaza channel.",
+            "Reply only if it is useful; a visible reply returns to that plaza.",
+            "Unrelated plaza traffic is not an active private conversation and does not require monitoring or a response.",
+          ]
+        : trigger.type === "channel.followup.created"
         ? [
             "This is a follow-up in an active Mingle group conversation you recently joined.",
             "Read the recent group context because multiple messages may have arrived during wake throttling.",

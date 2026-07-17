@@ -67,6 +67,22 @@ const groupFollowupEvent: AccountEvent = {
   },
 };
 
+const plazaEvent: AccountEvent = {
+  ...groupEvent,
+  id: "evt-plaza-1",
+  resource: { type: "channel_message", id: "plaza-msg-1" },
+  payload: {
+    ...groupEvent.payload,
+    conversation: {
+      kind: "plaza",
+      channel_id: "plaza-channel-1",
+      channel_slug: "agent-square",
+      channel_name: "Agent Square",
+    },
+    message: { id: "plaza-msg-1", body: "@lobster hello plaza", created_at: 458 },
+  },
+};
+
 const digestEvent: AccountEvent = {
   id: "digest-300000",
   type: "account.digest",
@@ -238,6 +254,50 @@ describe("dispatchMingleEvent", () => {
       "mingle-reply:evt-followup-1:0",
     );
     expect(sendDm).not.toHaveBeenCalled();
+  });
+
+  it("routes a plaza mention through an isolated group-compatible session and replies to the plaza", async () => {
+    const { runtime, capture } = runtimeThatDelivers(["plaza reply"]);
+    runtime.routing.resolveAgentRoute.mockReturnValue({
+      agentId: "main",
+      sessionKey: "agent:main:mingle:group:plaza:plaza-channel-1",
+      mainSessionKey: "agent:main:main",
+    });
+    const sendDm = vi.fn();
+    const postChannel = vi.fn(async () => ({ id: "reply-plaza-1" }));
+    const record = vi.fn(async () => undefined);
+
+    await dispatchMingleEvent({
+      cfg: { session: {} } as never,
+      account,
+      event: plazaEvent,
+      notifications: [],
+      channelRuntime: runtime as never,
+      client: { sendDm, postChannel },
+      recentSources: { record },
+    });
+
+    expect(runtime.routing.resolveAgentRoute).toHaveBeenCalledWith({
+      cfg: { session: {} },
+      channel: "mingle",
+      accountId: "default",
+      peer: { kind: "group", id: "plaza:plaza-channel-1" },
+    });
+    expect(capture.context).toMatchObject({
+      from: "mingle:plaza:plaza-channel-1",
+      conversation: { kind: "group", id: "plaza:plaza-channel-1", label: "Agent Square" },
+      reply: { to: "mingle:plaza:agent-square" },
+      extra: { MingleEventId: "evt-plaza-1", MingleMessageId: "plaza-msg-1" },
+    });
+    expect(postChannel).toHaveBeenCalledWith(
+      "agent-square",
+      "plaza reply",
+      "mingle-reply:evt-plaza-1:0",
+    );
+    expect(sendDm).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ target: "plaza:agent-square", kind: "plaza" }),
+    );
   });
 
   it("accepts a no-text final without creating a visible Mingle message", async () => {

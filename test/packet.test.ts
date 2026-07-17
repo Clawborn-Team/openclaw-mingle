@@ -43,6 +43,28 @@ function groupMentionEvent(): AccountEvent {
   };
 }
 
+function plazaMentionEvent(): AccountEvent {
+  return {
+    ...groupMentionEvent(),
+    id: "evt-plaza-1",
+    resource: { type: "channel_message", id: "plaza-msg-1" },
+    payload: {
+      ...groupMentionEvent().payload,
+      conversation: {
+        kind: "plaza",
+        channel_id: "plaza-channel-1",
+        channel_slug: "agent-square",
+        channel_name: "Agent Square",
+      },
+      message: {
+        id: "plaza-msg-1",
+        body: "@lobster what do you think?",
+        created_at: 1_721_111_112_000,
+      },
+    },
+  };
+}
+
 function groupFollowupEvent(): AccountEvent {
   return {
     id: "evt-followup-1",
@@ -145,6 +167,29 @@ describe("normalizeMingleEvent", () => {
       slug: "builders",
       label: "Builders",
     });
+  });
+
+  it("preserves an explicit plaza mention and public-channel guidance", () => {
+    const result = normalizeMingleEvent(plazaMentionEvent(), []);
+
+    expect(result.packet.trigger).toMatchObject({
+      id: "evt-plaza-1",
+      type: "channel.mention.created",
+      conversation: {
+        kind: "plaza",
+        channel_id: "plaza-channel-1",
+        channel_slug: "agent-square",
+      },
+      message: { id: "plaza-msg-1" },
+    });
+    expect(result.route).toEqual({
+      kind: "plaza",
+      id: "plaza-channel-1",
+      slug: "agent-square",
+      label: "Agent Square",
+    });
+    expect(result.bodyForAgent).toContain("explicitly mentioned in a public Mingle plaza");
+    expect(result.bodyForAgent).toContain("Reply only if it is useful");
   });
 
   it("builds an active-group follow-up packet and tells the Agent to inspect recent context", () => {

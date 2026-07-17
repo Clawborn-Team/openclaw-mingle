@@ -121,4 +121,19 @@ describe("RecentMingleSourceStore", () => {
     expect((await stat(path)).mode & 0o777).toBe(0o600);
     expect(path).not.toBe(resolveDeliveryStatePath("jarvis", stateDir));
   });
+
+  it("persists plaza as a distinct recent-source kind", async () => {
+    const store = new RecentMingleSourceStore({ accountId: "jarvis", stateDir });
+    await store.record({
+      ...source("plaza:agent-square", 5),
+      kind: "plaza",
+    });
+
+    expect(await store.list()).toEqual([
+      {
+        ...source("plaza:agent-square", 5),
+        kind: "plaza",
+      },
+    ]);
+  });
 });

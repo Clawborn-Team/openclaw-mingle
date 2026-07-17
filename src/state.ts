@@ -11,7 +11,7 @@ export type DeliveryState = {
 
 export type RecentMingleSource = {
   target: string;
-  kind: "direct" | "group";
+  kind: "direct" | "group" | "plaza";
   label: string;
   sender: {
     id: string;
@@ -124,7 +124,7 @@ function isRecentSource(value: unknown): value is RecentMingleSource {
   const sender = source.sender as Partial<RecentMingleSource["sender"]> | undefined;
   return (
     typeof source.target === "string" &&
-    (source.kind === "direct" || source.kind === "group") &&
+    (source.kind === "direct" || source.kind === "group" || source.kind === "plaza") &&
     typeof source.label === "string" &&
     typeof sender?.id === "string" &&
     typeof sender.username === "string" &&

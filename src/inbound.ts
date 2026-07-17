@@ -25,23 +25,30 @@ export type DispatchMingleEventParams = {
 export async function dispatchMingleEvent(params: DispatchMingleEventParams): Promise<void> {
   const normalized = normalizeMingleEvent(params.event, params.notifications);
   const isDigest = normalized.route.kind === "event-center";
+  const channelRoute =
+    normalized.route.kind === "group" || normalized.route.kind === "plaza"
+      ? normalized.route
+      : undefined;
+  const isChannel = channelRoute !== undefined;
+  const isPlaza = channelRoute?.kind === "plaza";
+  const channelPeerId = isPlaza ? `plaza:${normalized.route.id}` : normalized.route.id;
   const agentRoute = params.channelRuntime.routing.resolveAgentRoute({
     cfg: params.cfg,
     channel: CHANNEL_ID,
     accountId: params.account.accountId,
     peer: {
-      kind: normalized.route.kind === "group" ? "group" : "direct",
-      id: normalized.route.id,
+      kind: isChannel ? "group" : "direct",
+      id: channelPeerId,
     },
   });
   const sessionKey = agentRoute.sessionKey;
   const from =
-    normalized.route.kind === "group"
-      ? `mingle:group:${normalized.route.id}`
+    isChannel
+      ? `mingle:${isPlaza ? "plaza" : "group"}:${normalized.route.id}`
       : `mingle:${normalized.route.id}`;
   const replyTo =
-    normalized.route.kind === "group"
-      ? `mingle:group:${normalized.route.slug}`
+    isChannel
+      ? `mingle:${isPlaza ? "plaza" : "group"}:${channelRoute!.slug}`
       : `mingle:${normalized.route.id}`;
   let replyIndex = 0;
 
@@ -49,10 +56,10 @@ export async function dispatchMingleEvent(params: DispatchMingleEventParams): Pr
     const trigger = normalized.packet.trigger;
     await params.recentSources.record({
       target:
-        normalized.route.kind === "group"
-          ? `group:${normalized.route.slug}`
+        isChannel
+          ? `${isPlaza ? "plaza" : "group"}:${channelRoute!.slug}`
           : normalized.route.id,
-      kind: normalized.route.kind === "group" ? "group" : "direct",
+      kind: isPlaza ? "plaza" : normalized.route.kind === "group" ? "group" : "direct",
       label: normalized.route.label,
       sender: {
         id: trigger.sender.id,
@@ -97,8 +104,8 @@ export async function dispatchMingleEvent(params: DispatchMingleEventParams): Pr
                   username: normalized.packet.trigger.sender.username,
                 },
           conversation: {
-            kind: normalized.route.kind === "group" ? "group" : "direct",
-            id: normalized.route.id,
+            kind: isChannel ? "group" : "direct",
+            id: channelPeerId,
             label: normalized.route.label,
           },
           route: {
@@ -143,8 +150,8 @@ export async function dispatchMingleEvent(params: DispatchMingleEventParams): Pr
               if (!text) return { visibleReplySent: false };
               const index = replyIndex++;
               const idempotencyKey = `mingle-reply:${params.event.id}:${index}`;
-              if (normalized.route.kind === "group") {
-                await params.client.postChannel(normalized.route.slug, text, idempotencyKey);
+              if (isChannel) {
+                await params.client.postChannel(channelRoute!.slug, text, idempotencyKey);
               } else {
                 await params.client.sendDm(normalized.route.id, text, idempotencyKey);
               }

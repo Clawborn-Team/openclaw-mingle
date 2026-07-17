@@ -45,7 +45,7 @@ function applyAccountConfig(params) {
     }
     return { ...params.cfg, channels };
 }
-function monitorSnapshot(account, status) {
+export function monitorSnapshot(account, status) {
     const terminal = status.state === "authentication_failed" || status.state === "consumer_conflict";
     const running = !terminal && status.state !== "stopped";
     return {
@@ -58,7 +58,7 @@ function monitorSnapshot(account, status) {
         runtimeVersion: MINGLE_RUNTIME_VERSION,
         statusState: status.state,
         terminalDisconnect: terminal,
-        ...(status.errorCode ? { lastError: status.errorCode } : {}),
+        lastError: status.errorCode ?? null,
         ...(status.lastPollAt ? { lastPollAt: status.lastPollAt } : {}),
         ...(status.lastEventAt ? { lastEventAt: status.lastEventAt, lastInboundAt: status.lastEventAt } : {}),
         ...(status.updateState ? { updateState: status.updateState } : {}),

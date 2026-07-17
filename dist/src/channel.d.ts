@@ -1,3 +1,22 @@
 import { type ChannelPlugin } from "openclaw/plugin-sdk/channel-core";
+import { type MingleMonitorStatus } from "./monitor.js";
 import type { ResolvedMingleAccount } from "./types.js";
+export declare function monitorSnapshot(account: ResolvedMingleAccount, status: MingleMonitorStatus): {
+    updateErrorCode?: string;
+    updateTargetVersion?: string;
+    updateState?: import("./update-state.js").PluginUpdatePhase | "idle" | "disabled";
+    lastEventAt?: number;
+    lastInboundAt?: number;
+    lastPollAt?: number;
+    accountId: string;
+    name: string;
+    enabled: boolean;
+    configured: boolean;
+    running: boolean;
+    connected: boolean;
+    runtimeVersion: string;
+    statusState: import("./monitor.js").MingleMonitorState;
+    terminalDisconnect: boolean;
+    lastError: string | null;
+};
 export declare const minglePlugin: ChannelPlugin<ResolvedMingleAccount>;

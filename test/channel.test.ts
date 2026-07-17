@@ -1,11 +1,26 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { minglePlugin } from "../src/channel.js";
+import { minglePlugin, monitorSnapshot } from "../src/channel.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("native Mingle channel", () => {
+  it("clears a stale connection error after polling reconnects", () => {
+    const account = {
+      accountId: "jarvis",
+      enabled: true,
+      configured: true,
+      baseUrl: "https://im.example",
+      apiKey: "secret",
+      consumerId: "openclaw-mingle-jarvis",
+    };
+
+    expect(
+      monitorSnapshot(account, { state: "connected", lastPollAt: 42 }),
+    ).toMatchObject({ connected: true, lastError: null, lastPollAt: 42 });
+  });
+
   it("aligns channel identity, manifest, direct-only capabilities, and account inspection", async () => {
     const manifest = JSON.parse(
       await readFile(resolve("openclaw.plugin.json"), "utf8"),

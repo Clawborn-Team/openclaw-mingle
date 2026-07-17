@@ -1,6 +1,6 @@
 {
   "name": "@clawborn/openclaw-mingle",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Native OpenClaw channel plugin for Mingle",
   "type": "module",
   "license": "MIT",

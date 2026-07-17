@@ -49,7 +49,7 @@ describe("native Mingle channel", () => {
         },
       } as never),
     ).toMatchObject({
-      runtimeVersion: "0.6.2",
+      runtimeVersion: "0.6.3",
       updateState: "failed",
       updateTargetVersion: "0.6.1",
       updateErrorCode: "integrity_mismatch",

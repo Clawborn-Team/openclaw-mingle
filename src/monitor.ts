@@ -8,6 +8,8 @@ import {
 import { MalformedMingleEventError, UnsupportedMingleEventError } from "./packet.js";
 import { RecentMingleSourceStore, type DeliveryStateStore } from "./state.js";
 import type { ResolvedMingleAccount } from "./types.js";
+import type { RuntimeUpdateNotice } from "./update-state.js";
+import type { PluginUpdater, UpdateSnapshot } from "./updater.js";
 
 export type MingleMonitorState =
   | "starting"
@@ -22,9 +24,16 @@ export type MingleMonitorStatus = {
   errorCode?: string;
   lastEventAt?: number;
   lastPollAt?: number;
+  updateState?: UpdateSnapshot["state"] | undefined;
+  updateTargetVersion?: string | undefined;
+  updateErrorCode?: string | undefined;
 };
 
 type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm" | "postChannel">;
+type MonitorUpdater = Pick<
+  PluginUpdater,
+  "consider" | "snapshot" | "pendingNotice" | "markNoticeDelivered"
+>;
 const DEFAULT_DIGEST_INTERVAL_MS = 300_000;
 const DEFAULT_POLLING_STALL_THRESHOLD_MS = 45_000;
 
@@ -123,6 +132,8 @@ export async function monitorMingleAccount(options: {
   digestIntervalMs?: number;
   pollingStallThresholdMs?: number;
   recentSources?: RecentMingleSourceStore;
+  updater?: MonitorUpdater;
+  autoUpdate?: boolean;
 }): Promise<void> {
   const dispatch = options.dispatch ?? dispatchMingleEvent;
   const sleep = options.sleep ?? abortableSleep;
@@ -133,11 +144,34 @@ export async function monitorMingleAccount(options: {
     options.pollingStallThresholdMs ?? DEFAULT_POLLING_STALL_THRESHOLD_MS;
   const recentSources =
     options.recentSources ?? new RecentMingleSourceStore({ accountId: options.account.accountId });
+  const autoUpdate = options.autoUpdate ?? true;
+  let updateSnapshot: UpdateSnapshot | undefined;
+  if (options.updater) {
+    updateSnapshot = await options.updater.snapshot(autoUpdate).catch(() => ({
+      state: "failed" as const,
+      updateErrorCode: "update_state_failed",
+    }));
+  }
+  const emitStatus = (status: MingleMonitorStatus) =>
+    options.setStatus?.({
+      ...status,
+      ...(updateSnapshot
+        ? {
+            updateState: updateSnapshot.state,
+            ...(updateSnapshot.updateTargetVersion
+              ? { updateTargetVersion: updateSnapshot.updateTargetVersion }
+              : {}),
+            ...(updateSnapshot.updateErrorCode
+              ? { updateErrorCode: updateSnapshot.updateErrorCode }
+              : {}),
+          }
+        : {}),
+    });
   let cursor = (await options.state.load()).cursor;
   let retryAttempt = 0;
   let nextDigestAt = now() + digestIntervalMs;
   let lastPollAt: number | undefined;
-  options.setStatus?.({ state: "starting" });
+  emitStatus({ state: "starting" });
 
   while (!options.abortSignal.aborted) {
     try {
@@ -152,9 +186,21 @@ export async function monitorMingleAccount(options: {
       });
       cursor = response.next_cursor;
       await options.state.saveCursor(cursor);
+      const runtimeDirective = response.runtime_directives?.[0];
+      if (options.updater && runtimeDirective) {
+        try {
+          updateSnapshot = await options.updater.consider(runtimeDirective, { autoUpdate });
+        } catch {
+          updateSnapshot = await options.updater.snapshot(autoUpdate).catch(() => ({
+            state: "failed" as const,
+            updateTargetVersion: runtimeDirective.version,
+            updateErrorCode: "update_state_failed",
+          }));
+        }
+      }
       retryAttempt = 0;
       lastPollAt = now();
-      options.setStatus?.({ state: "connected", lastPollAt });
+      emitStatus({ state: "connected", lastPollAt });
 
       const pendingNotifications = [];
       for (const notification of response.notifications) {
@@ -173,12 +219,19 @@ export async function monitorMingleAccount(options: {
           continue;
         }
         const notifications = notificationsAttached ? [] : pendingNotifications;
+        let runtimeNotice: RuntimeUpdateNotice | undefined;
+        if (options.updater) {
+          runtimeNotice = await options.updater
+            .pendingNotice(options.account.accountId)
+            .catch(() => undefined);
+        }
         try {
           await dispatch({
             cfg: options.cfg,
             account: options.account,
             event,
             notifications,
+            ...(runtimeNotice ? { runtimeNotice } : {}),
             channelRuntime: options.channelRuntime,
             client: options.client,
             recentSources,
@@ -186,6 +239,11 @@ export async function monitorMingleAccount(options: {
         } catch (error) {
           await options.client.nack(event.id, nackReason(error), options.abortSignal);
           continue;
+        }
+        if (runtimeNotice && options.updater) {
+          await options.updater
+            .markNoticeDelivered(options.account.accountId)
+            .catch(() => undefined);
         }
         await options.state.markAccepted(event.id);
         for (const notification of notifications) {
@@ -198,7 +256,7 @@ export async function monitorMingleAccount(options: {
         );
         notificationsAttached = true;
         completedTurn = true;
-        options.setStatus?.({ state: "connected", lastPollAt, lastEventAt: now() });
+        emitStatus({ state: "connected", lastPollAt, lastEventAt: now() });
       }
 
       if (response.events.length === 0 && digestDue) {
@@ -210,12 +268,19 @@ export async function monitorMingleAccount(options: {
           resource: { type: "account", id: options.account.accountId },
           payload: { interval_ms: digestIntervalMs },
         };
+        let runtimeNotice: RuntimeUpdateNotice | undefined;
+        if (options.updater) {
+          runtimeNotice = await options.updater
+            .pendingNotice(options.account.accountId)
+            .catch(() => undefined);
+        }
         try {
           await dispatch({
             cfg: options.cfg,
             account: options.account,
             event: digestEvent,
             notifications: pendingNotifications,
+            ...(runtimeNotice ? { runtimeNotice } : {}),
             channelRuntime: options.channelRuntime,
             client: options.client,
             recentSources,
@@ -223,6 +288,11 @@ export async function monitorMingleAccount(options: {
         } catch {
           nextDigestAt = now() + digestIntervalMs;
           continue;
+        }
+        if (runtimeNotice && options.updater) {
+          await options.updater
+            .markNoticeDelivered(options.account.accountId)
+            .catch(() => undefined);
         }
         for (const notification of pendingNotifications) {
           await options.state.markAccepted(notification.id);
@@ -233,23 +303,23 @@ export async function monitorMingleAccount(options: {
           options.abortSignal,
         );
         completedTurn = true;
-        options.setStatus?.({ state: "connected", lastPollAt, lastEventAt: now() });
+        emitStatus({ state: "connected", lastPollAt, lastEventAt: now() });
       }
       if (completedTurn) nextDigestAt = now() + digestIntervalMs;
     } catch (error) {
       if (options.abortSignal.aborted) break;
       if (error instanceof MingleApiError) {
         if (error.status === 401 || error.status === 403) {
-          options.setStatus?.({ state: "authentication_failed", errorCode: error.code });
+          emitStatus({ state: "authentication_failed", errorCode: error.code });
           return;
         }
         if (error.status === 409) {
-          options.setStatus?.({ state: "consumer_conflict", errorCode: error.code });
+          emitStatus({ state: "consumer_conflict", errorCode: error.code });
           return;
         }
       }
 
-      options.setStatus?.({
+      emitStatus({
         state: "reconnecting",
         errorCode:
           error instanceof MingleApiError || error instanceof MingleTransportError
@@ -264,5 +334,5 @@ export async function monitorMingleAccount(options: {
       await sleep(baseDelay + jitter, options.abortSignal);
     }
   }
-  options.setStatus?.({ state: "stopped" });
+  emitStatus({ state: "stopped" });
 }

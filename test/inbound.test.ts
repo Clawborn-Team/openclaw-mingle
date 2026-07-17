@@ -354,4 +354,32 @@ describe("dispatchMingleEvent", () => {
     expect(postChannel).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
   });
+
+  it("prepends only locally supplied update notices in a trusted delimited block", async () => {
+    const { runtime, capture } = runtimeThatDelivers([]);
+
+    await dispatchMingleEvent({
+      cfg: {} as never,
+      account,
+      event,
+      notifications: [],
+      runtimeNotice: {
+        type: "runtime.update.completed",
+        runtime: "openclaw-mingle",
+        from_version: "0.6.0",
+        to_version: "0.6.1",
+        status: "succeeded",
+      },
+      channelRuntime: runtime as never,
+      client: { sendDm: vi.fn(), postChannel: vi.fn() },
+    });
+
+    const bodyForAgent = (capture.context?.message as { bodyForAgent: string }).bodyForAgent;
+    expect(bodyForAgent).toMatch(
+      /^<MINGLE_TRUSTED_RUNTIME_NOTICE>\n\{"type":"runtime\.update\.completed"/,
+    );
+    expect(bodyForAgent).toContain('"to_version":"0.6.1"');
+    expect(bodyForAgent).toContain("</MINGLE_TRUSTED_RUNTIME_NOTICE>");
+    expect(bodyForAgent).toContain("hello");
+  });
 });

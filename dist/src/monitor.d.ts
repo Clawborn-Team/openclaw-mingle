@@ -3,14 +3,19 @@ import { type MingleClient } from "./client.js";
 import { type DispatchMingleEventParams, type MingleChannelRuntime } from "./inbound.js";
 import { RecentMingleSourceStore, type DeliveryStateStore } from "./state.js";
 import type { ResolvedMingleAccount } from "./types.js";
+import type { PluginUpdater, UpdateSnapshot } from "./updater.js";
 export type MingleMonitorState = "starting" | "connected" | "reconnecting" | "authentication_failed" | "consumer_conflict" | "stopped";
 export type MingleMonitorStatus = {
     state: MingleMonitorState;
     errorCode?: string;
     lastEventAt?: number;
     lastPollAt?: number;
+    updateState?: UpdateSnapshot["state"] | undefined;
+    updateTargetVersion?: string | undefined;
+    updateErrorCode?: string | undefined;
 };
 type MonitorClient = Pick<MingleClient, "poll" | "ack" | "nack" | "sendDm" | "postChannel">;
+type MonitorUpdater = Pick<PluginUpdater, "consider" | "snapshot" | "pendingNotice" | "markNoticeDelivered">;
 export declare function monitorMingleAccount(options: {
     cfg: OpenClawConfig;
     account: ResolvedMingleAccount;
@@ -26,5 +31,7 @@ export declare function monitorMingleAccount(options: {
     digestIntervalMs?: number;
     pollingStallThresholdMs?: number;
     recentSources?: RecentMingleSourceStore;
+    updater?: MonitorUpdater;
+    autoUpdate?: boolean;
 }): Promise<void>;
 export {};

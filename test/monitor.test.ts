@@ -6,7 +6,12 @@ import { MingleApiError, MingleTransportError } from "../src/client.js";
 import type { DispatchMingleEventParams } from "../src/inbound.js";
 import { monitorMingleAccount } from "../src/monitor.js";
 import { DeliveryStateStore } from "../src/state.js";
-import type { AccountEvent, EventCenterPacket, ResolvedMingleAccount } from "../src/types.js";
+import type {
+  AccountEvent,
+  EventCenterPacket,
+  ResolvedMingleAccount,
+  RuntimeUpdateDirective,
+} from "../src/types.js";
 
 const account: ResolvedMingleAccount = {
   accountId: "default",
@@ -34,12 +39,23 @@ const packet = (
   events: AccountEvent[],
   notifications: AccountEvent[] = [],
   cursor = "cursor-1",
+  runtimeDirectives?: RuntimeUpdateDirective[],
 ): EventCenterPacket => ({
   schema: "mingle.account-event-center.v1",
   events,
   notifications,
   next_cursor: cursor,
+  ...(runtimeDirectives ? { runtime_directives: runtimeDirectives } : {}),
 });
+
+const updateDirective: RuntimeUpdateDirective = {
+  id: "openclaw-mingle:0.6.1:aaaaaaaaaaaa",
+  type: "plugin.update",
+  runtime: "openclaw-mingle",
+  version: "0.6.1",
+  sha256: "a".repeat(64),
+  required: false,
+};
 
 function apiError(status: number, code: string, retryAfterMs?: number) {
   return new MingleApiError({
@@ -491,5 +507,103 @@ describe("monitorMingleAccount", () => {
     });
 
     expect(client.poll).toHaveBeenCalledTimes(2);
+  });
+
+  it("processes update directives without interrupting business event delivery", async () => {
+    const client = {
+      poll: vi.fn(async () => {
+        controller.abort();
+        return packet([event("evt-update")], [], "cursor-update", [updateDirective]);
+      }),
+      ack: vi.fn(async () => 1),
+      nack: vi.fn(async () => undefined),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+    const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => undefined);
+    const updater = {
+      consider: vi.fn(async () => {
+        throw new Error("updater storage unavailable");
+      }),
+      snapshot: vi.fn(async () => ({
+        state: "failed" as const,
+        updateTargetVersion: "0.6.1",
+        updateErrorCode: "update_state_failed",
+      })),
+      pendingNotice: vi.fn(async () => undefined),
+      markNoticeDelivered: vi.fn(async (_accountId: string) => undefined),
+    };
+    const statuses: any[] = [];
+
+    await monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      updater,
+      autoUpdate: true,
+      abortSignal: controller.signal,
+      dispatch,
+      setStatus: (status) => statuses.push(status),
+    });
+
+    expect(updater.consider).toHaveBeenCalledWith(updateDirective, { autoUpdate: true });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(client.ack).toHaveBeenCalledWith(["evt-update"], [], controller.signal);
+    expect((await state.load()).cursor).toBe("cursor-update");
+    expect(statuses).toContainEqual(
+      expect.objectContaining({
+        state: "connected",
+        updateState: "failed",
+        updateTargetVersion: "0.6.1",
+        updateErrorCode: "update_state_failed",
+      }),
+    );
+  });
+
+  it("marks a local update notice delivered only after a successful Agent turn", async () => {
+    const notice = {
+      type: "runtime.update.completed" as const,
+      runtime: "openclaw-mingle" as const,
+      from_version: "0.6.0",
+      to_version: "0.6.1",
+      status: "succeeded" as const,
+    };
+    const client = {
+      poll: vi.fn(async () => {
+        controller.abort();
+        return packet([event("evt-notice")]);
+      }),
+      ack: vi.fn(async () => 1),
+      nack: vi.fn(async () => undefined),
+      sendDm: vi.fn(),
+      postChannel: vi.fn(),
+    };
+    const dispatch = vi.fn(async (_params: DispatchMingleEventParams) => undefined);
+    const updater = {
+      consider: vi.fn(),
+      snapshot: vi.fn(async () => ({ state: "succeeded" as const, updateTargetVersion: "0.6.1" })),
+      pendingNotice: vi.fn(async () => notice),
+      markNoticeDelivered: vi.fn(async (_accountId: string) => undefined),
+    };
+
+    await monitorMingleAccount({
+      cfg: {} as never,
+      account,
+      channelRuntime: {} as never,
+      client,
+      state,
+      updater,
+      autoUpdate: true,
+      abortSignal: controller.signal,
+      dispatch,
+    });
+
+    expect(dispatch.mock.calls[0]![0].runtimeNotice).toEqual(notice);
+    expect(updater.markNoticeDelivered).toHaveBeenCalledWith("default");
+    expect(dispatch.mock.invocationCallOrder[0]).toBeLessThan(
+      updater.markNoticeDelivered.mock.invocationCallOrder[0]!,
+    );
   });
 });

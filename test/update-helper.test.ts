@@ -98,6 +98,7 @@ describe("update helper", () => {
     await mkdir(dirname(lockPath), { recursive: true });
     const competingLock = await open(lockPath, "wx", 0o600);
     try {
+      await competingLock.writeFile(String(process.pid));
       const runOpenClaw = vi.fn(async () => undefined);
       expect(await runUpdateHelper(args, { runOpenClaw })).toBe("failed");
       expect(runOpenClaw).not.toHaveBeenCalled();
@@ -105,6 +106,18 @@ describe("update helper", () => {
     } finally {
       await competingLock.close();
     }
+  });
+
+  it("reclaims a lock whose helper process no longer exists", async () => {
+    const { args, store } = await setup();
+    const lockPath = resolveUpdateLockPath(args.stateDir);
+    await mkdir(dirname(lockPath), { recursive: true });
+    await writeFile(lockPath, "999999999", { mode: 0o600 });
+    const runOpenClaw = vi.fn(async () => undefined);
+
+    expect(await runUpdateHelper(args, { runOpenClaw })).toBe("succeeded");
+    expect(runOpenClaw).toHaveBeenCalledTimes(2);
+    expect((await store.load())?.state).toBe("succeeded");
   });
 
   it("launches the compiled helper detached with fixed arguments and no shell", async () => {

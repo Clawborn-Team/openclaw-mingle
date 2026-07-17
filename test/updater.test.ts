@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -176,5 +176,58 @@ describe("PluginUpdater", () => {
       updateErrorCode: "schedule_failed",
     });
     expect((await store.load())?.errorCode).toBe("schedule_failed");
+  });
+
+  it("confirms an installed target on startup and cleans the verified tarball", async () => {
+    const { updater, stateDir, store } = await makeUpdater({ currentVersion: "0.6.1" });
+    const tarballPath = join(stateDir, "installed.tgz");
+    await writeFile(tarballPath, tarball);
+    await store.save({
+      schema: 1,
+      directiveId: "openclaw-mingle:0.6.1:aaaaaaaaaaaa",
+      fromVersion: "0.6.0",
+      targetVersion: "0.6.1",
+      sha256: digest,
+      state: "succeeded",
+      attempt: 1,
+      nextAttemptAt: 0,
+      tarballPath,
+      notifiedAccounts: [],
+    });
+
+    expect(await updater.snapshot()).toMatchObject({
+      state: "succeeded",
+      updateTargetVersion: "0.6.1",
+    });
+    await expect(stat(tarballPath)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await store.load())?.tarballPath).toBeUndefined();
+  });
+
+  it("retries a scheduled helper that did not finish before its recovery deadline", async () => {
+    let now = 1_000_000;
+    const fetchMock = vi.fn(async () => new Response(tarball));
+    const { updater, store, scheduleInstall } = await makeUpdater({
+      fetch: fetchMock as typeof fetch,
+      now: () => now,
+    });
+    await store.save({
+      schema: 1,
+      directiveId: directive().id,
+      fromVersion: "0.6.0",
+      targetVersion: "0.6.1",
+      sha256: digest,
+      state: "scheduled",
+      attempt: 1,
+      nextAttemptAt: now - 1,
+      notifiedAccounts: [],
+    });
+
+    expect(await updater.consider(directive(), { autoUpdate: true })).toMatchObject({
+      state: "scheduled",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(scheduleInstall).toHaveBeenCalledTimes(1);
+    expect((await store.load())?.attempt).toBe(2);
+    now += 1;
   });
 });

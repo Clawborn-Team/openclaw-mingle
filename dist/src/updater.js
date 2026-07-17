@@ -9,6 +9,7 @@ const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_BYTES = 20 * 1024 * 1024;
+const HELPER_RECOVERY_MS = 10 * 60_000;
 const RETRY_DELAYS_MS = [60_000, 300_000, 1_800_000, 21_600_000];
 const RELEASE_ROOT = "https://github.com/Clawborn-Team/openclaw-mingle/releases/download";
 class UpdateFailure extends Error {
@@ -109,7 +110,19 @@ export class PluginUpdater {
         }
     }
     async snapshot(autoUpdate = true) {
-        return snapshotFromState(await this.store.load(), !autoUpdate);
+        let state = await this.store.load();
+        const current = parseStableVersion(this.currentVersion);
+        const target = state ? parseStableVersion(state.targetVersion) : undefined;
+        if (state?.state === "succeeded" &&
+            state.tarballPath &&
+            current &&
+            target &&
+            compareVersions(current, target) >= 0) {
+            await rm(state.tarballPath, { force: true }).catch(() => undefined);
+            state = { ...state, tarballPath: undefined };
+            await this.store.save(state);
+        }
+        return snapshotFromState(state, !autoUpdate);
     }
     pendingNotice(accountId) {
         return this.store.pendingNotice(accountId);
@@ -120,7 +133,12 @@ export class PluginUpdater {
     async considerEligible(directive, autoUpdate) {
         const existing = await this.store.load();
         const sameTarget = existing?.targetVersion === directive.version;
-        if (sameTarget && ["scheduled", "installing", "succeeded"].includes(existing.state)) {
+        if (sameTarget && existing.state === "succeeded") {
+            return snapshotFromState(existing, !autoUpdate);
+        }
+        if (sameTarget &&
+            (existing.state === "scheduled" || existing.state === "installing") &&
+            this.now() < existing.nextAttemptAt) {
             return snapshotFromState(existing, !autoUpdate);
         }
         if (sameTarget && existing.state === "failed" && this.now() < existing.nextAttemptAt) {
@@ -147,6 +165,7 @@ export class PluginUpdater {
             const scheduled = {
                 ...available,
                 state: "scheduled",
+                nextAttemptAt: this.now() + HELPER_RECOVERY_MS,
                 tarballPath,
             };
             await this.store.save(scheduled);

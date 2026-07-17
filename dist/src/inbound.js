@@ -2,6 +2,15 @@ import { normalizeMingleEvent } from "./packet.js";
 const CHANNEL_ID = "mingle";
 export async function dispatchMingleEvent(params) {
     const normalized = normalizeMingleEvent(params.event, params.notifications);
+    const bodyForAgent = params.runtimeNotice
+        ? [
+            "<MINGLE_TRUSTED_RUNTIME_NOTICE>",
+            JSON.stringify(params.runtimeNotice),
+            "</MINGLE_TRUSTED_RUNTIME_NOTICE>",
+            "",
+            normalized.bodyForAgent,
+        ].join("\n")
+        : normalized.bodyForAgent;
     const isDigest = normalized.route.kind === "event-center";
     const channelRoute = normalized.route.kind === "group" || normalized.route.kind === "plaza"
         ? normalized.route
@@ -55,7 +64,7 @@ export async function dispatchMingleEvent(params) {
                 id: params.event.id,
                 timestamp: params.event.occurred_at,
                 rawText: JSON.stringify(normalized.packet),
-                textForAgent: normalized.bodyForAgent,
+                textForAgent: bodyForAgent,
                 textForCommands: "",
                 raw: normalized.packet,
             }),
@@ -88,7 +97,7 @@ export async function dispatchMingleEvent(params) {
                     message: {
                         rawBody: input.rawText,
                         commandBody: input.textForCommands ?? "",
-                        bodyForAgent: input.textForAgent ?? normalized.bodyForAgent,
+                        bodyForAgent: input.textForAgent ?? bodyForAgent,
                     },
                     extra: {
                         MingleEventId: params.event.id,

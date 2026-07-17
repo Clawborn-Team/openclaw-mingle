@@ -24,6 +24,21 @@ describe("native Mingle channel", () => {
       configured: true,
       tokenStatus: "available",
     });
+    expect(
+      minglePlugin.status?.buildAccountSnapshot?.({
+        account: minglePlugin.config.resolveAccount(cfg, "default"),
+        runtime: {
+          updateState: "failed",
+          updateTargetVersion: "0.6.1",
+          updateErrorCode: "integrity_mismatch",
+        },
+      } as never),
+    ).toMatchObject({
+      runtimeVersion: "0.6.0",
+      updateState: "failed",
+      updateTargetVersion: "0.6.1",
+      updateErrorCode: "integrity_mismatch",
+    });
   });
 
   it("normalizes direct targets and sends explicit outbound text idempotently", async () => {

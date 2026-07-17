@@ -77,11 +77,33 @@ export async function monitorMingleAccount(options) {
     const digestIntervalMs = options.digestIntervalMs ?? DEFAULT_DIGEST_INTERVAL_MS;
     const pollingStallThresholdMs = options.pollingStallThresholdMs ?? DEFAULT_POLLING_STALL_THRESHOLD_MS;
     const recentSources = options.recentSources ?? new RecentMingleSourceStore({ accountId: options.account.accountId });
+    const autoUpdate = options.autoUpdate ?? true;
+    let updateSnapshot;
+    if (options.updater) {
+        updateSnapshot = await options.updater.snapshot(autoUpdate).catch(() => ({
+            state: "failed",
+            updateErrorCode: "update_state_failed",
+        }));
+    }
+    const emitStatus = (status) => options.setStatus?.({
+        ...status,
+        ...(updateSnapshot
+            ? {
+                updateState: updateSnapshot.state,
+                ...(updateSnapshot.updateTargetVersion
+                    ? { updateTargetVersion: updateSnapshot.updateTargetVersion }
+                    : {}),
+                ...(updateSnapshot.updateErrorCode
+                    ? { updateErrorCode: updateSnapshot.updateErrorCode }
+                    : {}),
+            }
+            : {}),
+    });
     let cursor = (await options.state.load()).cursor;
     let retryAttempt = 0;
     let nextDigestAt = now() + digestIntervalMs;
     let lastPollAt;
-    options.setStatus?.({ state: "starting" });
+    emitStatus({ state: "starting" });
     while (!options.abortSignal.aborted) {
         try {
             const digestDue = now() >= nextDigestAt;
@@ -95,9 +117,22 @@ export async function monitorMingleAccount(options) {
             });
             cursor = response.next_cursor;
             await options.state.saveCursor(cursor);
+            const runtimeDirective = response.runtime_directives?.[0];
+            if (options.updater && runtimeDirective) {
+                try {
+                    updateSnapshot = await options.updater.consider(runtimeDirective, { autoUpdate });
+                }
+                catch {
+                    updateSnapshot = await options.updater.snapshot(autoUpdate).catch(() => ({
+                        state: "failed",
+                        updateTargetVersion: runtimeDirective.version,
+                        updateErrorCode: "update_state_failed",
+                    }));
+                }
+            }
             retryAttempt = 0;
             lastPollAt = now();
-            options.setStatus?.({ state: "connected", lastPollAt });
+            emitStatus({ state: "connected", lastPollAt });
             const pendingNotifications = [];
             for (const notification of response.notifications) {
                 if (await options.state.hasAccepted(notification.id)) {
@@ -115,12 +150,19 @@ export async function monitorMingleAccount(options) {
                     continue;
                 }
                 const notifications = notificationsAttached ? [] : pendingNotifications;
+                let runtimeNotice;
+                if (options.updater) {
+                    runtimeNotice = await options.updater
+                        .pendingNotice(options.account.accountId)
+                        .catch(() => undefined);
+                }
                 try {
                     await dispatch({
                         cfg: options.cfg,
                         account: options.account,
                         event,
                         notifications,
+                        ...(runtimeNotice ? { runtimeNotice } : {}),
                         channelRuntime: options.channelRuntime,
                         client: options.client,
                         recentSources,
@@ -130,6 +172,11 @@ export async function monitorMingleAccount(options) {
                     await options.client.nack(event.id, nackReason(error), options.abortSignal);
                     continue;
                 }
+                if (runtimeNotice && options.updater) {
+                    await options.updater
+                        .markNoticeDelivered(options.account.accountId)
+                        .catch(() => undefined);
+                }
                 await options.state.markAccepted(event.id);
                 for (const notification of notifications) {
                     await options.state.markAccepted(notification.id);
@@ -137,7 +184,7 @@ export async function monitorMingleAccount(options) {
                 await options.client.ack([event.id], notifications.map((notification) => notification.id), options.abortSignal);
                 notificationsAttached = true;
                 completedTurn = true;
-                options.setStatus?.({ state: "connected", lastPollAt, lastEventAt: now() });
+                emitStatus({ state: "connected", lastPollAt, lastEventAt: now() });
             }
             if (response.events.length === 0 && digestDue) {
                 const digestEvent = {
@@ -148,12 +195,19 @@ export async function monitorMingleAccount(options) {
                     resource: { type: "account", id: options.account.accountId },
                     payload: { interval_ms: digestIntervalMs },
                 };
+                let runtimeNotice;
+                if (options.updater) {
+                    runtimeNotice = await options.updater
+                        .pendingNotice(options.account.accountId)
+                        .catch(() => undefined);
+                }
                 try {
                     await dispatch({
                         cfg: options.cfg,
                         account: options.account,
                         event: digestEvent,
                         notifications: pendingNotifications,
+                        ...(runtimeNotice ? { runtimeNotice } : {}),
                         channelRuntime: options.channelRuntime,
                         client: options.client,
                         recentSources,
@@ -163,12 +217,17 @@ export async function monitorMingleAccount(options) {
                     nextDigestAt = now() + digestIntervalMs;
                     continue;
                 }
+                if (runtimeNotice && options.updater) {
+                    await options.updater
+                        .markNoticeDelivered(options.account.accountId)
+                        .catch(() => undefined);
+                }
                 for (const notification of pendingNotifications) {
                     await options.state.markAccepted(notification.id);
                 }
                 await options.client.ack([], pendingNotifications.map((notification) => notification.id), options.abortSignal);
                 completedTurn = true;
-                options.setStatus?.({ state: "connected", lastPollAt, lastEventAt: now() });
+                emitStatus({ state: "connected", lastPollAt, lastEventAt: now() });
             }
             if (completedTurn)
                 nextDigestAt = now() + digestIntervalMs;
@@ -178,15 +237,15 @@ export async function monitorMingleAccount(options) {
                 break;
             if (error instanceof MingleApiError) {
                 if (error.status === 401 || error.status === 403) {
-                    options.setStatus?.({ state: "authentication_failed", errorCode: error.code });
+                    emitStatus({ state: "authentication_failed", errorCode: error.code });
                     return;
                 }
                 if (error.status === 409) {
-                    options.setStatus?.({ state: "consumer_conflict", errorCode: error.code });
+                    emitStatus({ state: "consumer_conflict", errorCode: error.code });
                     return;
                 }
             }
-            options.setStatus?.({
+            emitStatus({
                 state: "reconnecting",
                 errorCode: error instanceof MingleApiError || error instanceof MingleTransportError
                     ? error.code
@@ -201,6 +260,6 @@ export async function monitorMingleAccount(options) {
             await sleep(baseDelay + jitter, options.abortSignal);
         }
     }
-    options.setStatus?.({ state: "stopped" });
+    emitStatus({ state: "stopped" });
 }
 //# sourceMappingURL=monitor.js.map

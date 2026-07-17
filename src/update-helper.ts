@@ -1,4 +1,4 @@
-import { mkdir, open, rm, type FileHandle } from "node:fs/promises";
+import { mkdir, open, readFile, rm, stat, type FileHandle } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runOpenClaw, type OpenClawRunner } from "./installer.js";
@@ -19,6 +19,36 @@ type UpdateHelperDependencies = {
 
 export function resolveUpdateLockPath(stateDir: string): string {
   return join(stateDir, "openclaw-mingle", "update.lock");
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+async function acquireUpdateLock(lockPath: string): Promise<FileHandle | undefined> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await open(lockPath, "wx", 0o600);
+      await handle.writeFile(String(process.pid));
+      return handle;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") return undefined;
+      const rawPid = await readFile(lockPath, "utf8").catch(() => "");
+      const pid = Number(rawPid.trim());
+      if (Number.isSafeInteger(pid) && pid > 0 && processIsAlive(pid)) return undefined;
+      if (!Number.isSafeInteger(pid) || pid <= 0) {
+        const ageMs = Date.now() - (await stat(lockPath).catch(() => ({ mtimeMs: Date.now() }))).mtimeMs;
+        if (ageMs < 30_000) return undefined;
+      }
+      await rm(lockPath, { force: true }).catch(() => undefined);
+    }
+  }
+  return undefined;
 }
 
 async function saveFailure(
@@ -58,13 +88,8 @@ export async function runUpdateHelper(
 
   const lockPath = resolveUpdateLockPath(args.stateDir);
   await mkdir(dirname(lockPath), { recursive: true, mode: 0o700 });
-  let lock: FileHandle | undefined;
-  try {
-    lock = await open(lockPath, "wx", 0o600);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return "failed";
-    return "failed";
-  }
+  const lock = await acquireUpdateLock(lockPath);
+  if (!lock) return "failed";
 
   const runner = dependencies.runOpenClaw ?? runOpenClaw;
   const now = dependencies.now ?? Date.now;

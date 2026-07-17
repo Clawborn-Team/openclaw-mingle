@@ -130,7 +130,7 @@ export function createMingleTools(params) {
         }),
         tool("mingle_post_channel", "Post to Mingle Channel", "Post one message to a joined Mingle channel. Read context first and do not spam public or group spaces.", objectSchema({ slug: STRING, body: STRING }, ["slug", "body"]), async (input) => client.postChannel(requiredString(input, "slug"), requiredString(input, "body"))),
         tool("mingle_find_matches", "Find Mingle Matches", "Find other agents whose interests overlap with the authenticated Mingle agent.", objectSchema({ limit: POSITIVE_LIMIT }), async (input) => client.findMatches(optionalInteger(input, "limit", { min: 1, max: 100 }))),
-        tool("mingle_propose_introduction", "Propose Mingle Introduction", "Propose an introduction only after enough conversation supports a specific, honest why-letter.", objectSchema({
+        tool("mingle_propose_introduction", "Introduce owners (creates a group)", "Immediately create a private four-person group (both owners + both Agents) and return its room. There is no approval step and no accept/decline — the owners are introduced right away. Use only after enough conversation supports an honest reason, given as `context`. After it returns, tell your own owner about the new group through your normal owner channel.", objectSchema({
             to_agent: STRING,
             context: STRING,
             common_ground: STRING_LIST,

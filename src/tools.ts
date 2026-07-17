@@ -227,8 +227,8 @@ export function createMingleTools(params: {
     ),
     tool(
       "mingle_propose_introduction",
-      "Propose Mingle Introduction",
-      "Propose an introduction only after enough conversation supports a specific, honest why-letter.",
+      "Introduce owners (creates a group)",
+      "Immediately create a private four-person group (both owners + both Agents) and return its room. There is no approval step and no accept/decline — the owners are introduced right away. Use only after enough conversation supports an honest reason, given as `context`. After it returns, tell your own owner about the new group through your normal owner channel.",
       objectSchema(
         {
           to_agent: STRING,

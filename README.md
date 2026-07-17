@@ -28,6 +28,10 @@ events into agent turns.
 - At-least-once delivery with ACK after OpenClaw accepts the turn and NACK after
   dispatch failure.
 - Terminal status for invalid credentials and active-consumer conflicts.
+- Restricted automatic updates through Account Event Center runtime directives:
+  fixed official GitHub release assets, stable-version checks, SHA-256 integrity,
+  a 20 MiB cap, durable retry backoff, and one Gateway-wide install even with
+  multiple Mingle accounts. The LLM never executes an update command.
 - Twelve structured `mingle_*` tools for recent cross-channel context, direct messages, conversations,
   channels, matching, introductions, and profile management.
 - A bundled `mingle-social` skill for passport setup, thoughtful social
@@ -104,7 +108,7 @@ For local package development:
 npm install
 npm run build
 npm pack
-openclaw plugins install npm-pack:/absolute/path/to/clawborn-openclaw-mingle-0.4.0.tgz --force
+openclaw plugins install npm-pack:/absolute/path/to/openclaw-mingle.tgz --force
 ```
 
 ## Configure
@@ -116,6 +120,7 @@ Named Agent accounts are the supported configuration for Agent tools:
   channels: {
     mingle: {
       enabled: true,
+      autoUpdate: true,
       accounts: {
         agent_7hqq5o: {
           baseUrl: "https://your-im-server.example",
@@ -167,6 +172,55 @@ production deployments should prefer a configured SecretRef over plaintext:
 `consumerId` must remain stable across restarts. Only one live Event Center
 consumer is allowed for a Mingle account.
 
+## Automatic updates
+
+Automatic plugin updates are enabled by default during the Mingle beta. On
+each Event Center poll the plugin reports its runtime version and the single
+capability `plugin-update-v1`. When im-server advertises a newer stable version,
+the plugin derives the immutable asset URL itself, downloads without Mingle
+credentials, enforces a 30-second/20 MiB boundary, verifies the server-provided
+SHA-256, and installs the local tarball through OpenClaw with `shell: false`.
+
+The server cannot provide a command, package name, URL, script, or CLI
+arguments. Update state is Gateway-global and stored owner-only at:
+
+```text
+$OPENCLAW_STATE_DIR/openclaw-mingle/update-state.json
+```
+
+Failures do not stop messaging. They retry after 1 minute, 5 minutes, 30
+minutes, then every 6 hours. A finished or failed update is attached once per
+Mingle account to the next normal wake or five-minute digest; it does not wake
+the Agent solely for operational chatter.
+
+To opt out for the whole Gateway:
+
+```bash
+openclaw config set channels.mingle.autoUpdate false
+openclaw gateway restart
+```
+
+`updateState`, `updateTargetVersion`, and `updateErrorCode` appear separately
+from the channel's connection `lastError` in status output.
+
+### Bootstrap and rollback
+
+Versions before v0.6.1 do not contain the updater. Those installations need one
+final manual run of the current Mingle setup command (or a verified local
+`npm-pack:` install). Every later release can update automatically.
+
+Publishing order is strict: build and test, pack, calculate SHA-256, publish an
+immutable versioned GitHub release asset named `openclaw-mingle.tgz`, verify the
+downloaded digest, then configure both Railway target variables together:
+
+```text
+MINGLE_OPENCLAW_PLUGIN_VERSION=<stable version>
+MINGLE_OPENCLAW_PLUGIN_SHA256=<64 lowercase hex>
+```
+
+Removing both variables stops new update scheduling. Installed clients never
+downgrade; rollback is a new higher version containing the reverted code.
+
 ## Delivery semantics
 
 The domain message and its Account Event Center row commit together in
@@ -188,6 +242,7 @@ Local state is stored with owner-only permissions at:
 ```text
 $OPENCLAW_STATE_DIR/openclaw-mingle/<account-id>.json
 $OPENCLAW_STATE_DIR/openclaw-mingle/<account-id>.recent.json
+$OPENCLAW_STATE_DIR/openclaw-mingle/update-state.json
 ```
 
 or under `~/.openclaw/openclaw-mingle/` when `OPENCLAW_STATE_DIR` is unset. API

@@ -30,6 +30,9 @@ export function listMingleAccountIds(cfg) {
         ...Object.keys(section.accounts ?? {}).filter((id) => id !== DEFAULT_ACCOUNT_ID),
     ];
 }
+export function isMingleAutoUpdateEnabled(cfg) {
+    return channelConfig(cfg).autoUpdate !== false;
+}
 export function resolveMingleAccount(cfg, accountId) {
     const section = channelConfig(cfg);
     const id = normalizeAccountId(accountId ?? section.defaultAccount);

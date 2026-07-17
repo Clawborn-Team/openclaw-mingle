@@ -46,6 +46,86 @@ describe("MingleClient", () => {
     expect(init).toMatchObject({ signal });
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer mingle_sk_top_secret");
     expect(new Headers(init?.headers).get("X-Mingle-Consumer-ID")).toBe("openclaw-mingle-default");
+    expect(new Headers(init?.headers).get("X-Mingle-Runtime")).toBe("openclaw-mingle");
+    expect(new Headers(init?.headers).get("X-Mingle-Runtime-Version")).toBe("0.6.0");
+    expect(new Headers(init?.headers).get("X-Mingle-Runtime-Capabilities")).toBe(
+      "plugin-update-v1",
+    );
+  });
+
+  it("parses one valid runtime update directive and remains compatible without it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            schema: "mingle.account-event-center.v1",
+            events: [],
+            notifications: [],
+            next_cursor: "cursor-with-directive",
+            runtime_directives: [
+              {
+                id: "openclaw-mingle:0.6.1:aaaaaaaaaaaa",
+                type: "plugin.update",
+                runtime: "openclaw-mingle",
+                version: "0.6.1",
+                sha256: "a".repeat(64),
+                required: false,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            schema: "mingle.account-event-center.v1",
+            events: [],
+            notifications: [],
+            next_cursor: "legacy-cursor",
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new MingleClient(account);
+
+    expect((await client.poll({ waitMs: 0 })).runtime_directives).toEqual([
+      expect.objectContaining({ type: "plugin.update", version: "0.6.1" }),
+    ]);
+    expect((await client.poll({ waitMs: 0 })).runtime_directives).toBeUndefined();
+  });
+
+  it("rejects malformed runtime update directives", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            schema: "mingle.account-event-center.v1",
+            events: [],
+            notifications: [],
+            next_cursor: "bad-directive",
+            runtime_directives: [
+              {
+                id: "bad",
+                type: "shell.execute",
+                runtime: "openclaw-mingle",
+                version: "0.6.1",
+                sha256: "not-a-digest",
+                required: false,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    await expect(new MingleClient(account).poll({ waitMs: 0 })).rejects.toThrow(
+      "Invalid Event Center response",
+    );
   });
 
   it("requests an immediate digest boundary explicitly", async () => {

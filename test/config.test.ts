@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { listMingleAccountIds, resolveMingleAccount } from "../src/config.js";
+import { MingleConfigSchema } from "../src/config-schema.js";
+import {
+  isMingleAutoUpdateEnabled,
+  listMingleAccountIds,
+  resolveMingleAccount,
+} from "../src/config.js";
 
 afterEach(() => {
   delete process.env.MINGLE_SERVER_URL;
@@ -68,5 +73,24 @@ describe("Mingle channel configuration", () => {
       channels: { mingle: { baseUrl: "file:///tmp/im", apiKey: "secret" } },
     } as never;
     expect(() => resolveMingleAccount(badCfg)).toThrow("http:// or https://");
+  });
+
+  it("enables automatic updates by default and honors the Gateway-global opt-out", () => {
+    expect(isMingleAutoUpdateEnabled({ channels: { mingle: {} } } as never)).toBe(true);
+    expect(
+      isMingleAutoUpdateEnabled({ channels: { mingle: { autoUpdate: false } } } as never),
+    ).toBe(false);
+  });
+
+  it("allows autoUpdate only at the channel top level", () => {
+    const schema = MingleConfigSchema.schema as {
+      properties: Record<string, unknown>;
+    };
+    const accounts = schema.properties.accounts as {
+      additionalProperties: { properties: Record<string, unknown> };
+    };
+
+    expect(schema.properties).toHaveProperty("autoUpdate");
+    expect(accounts.additionalProperties.properties).not.toHaveProperty("autoUpdate");
   });
 });

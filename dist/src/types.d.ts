@@ -6,6 +6,7 @@ export type MingleAccountConfig = {
     consumerId?: string;
 };
 export type MingleChannelConfig = MingleAccountConfig & {
+    autoUpdate?: boolean;
     defaultAccount?: string;
     accounts?: Record<string, MingleAccountConfig | undefined>;
 };
@@ -33,4 +34,13 @@ export type EventCenterPacket = {
     events: AccountEvent[];
     notifications: AccountEvent[];
     next_cursor: string;
+    runtime_directives?: RuntimeUpdateDirective[] | undefined;
+};
+export type RuntimeUpdateDirective = {
+    id: string;
+    type: "plugin.update";
+    runtime: "openclaw-mingle";
+    version: string;
+    sha256: string;
+    required: false;
 };

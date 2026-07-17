@@ -30,6 +30,7 @@ export const MingleConfigSchema: ReturnType<typeof buildJsonChannelConfigSchema>
     additionalProperties: false,
     properties: {
       ...accountProperties,
+      autoUpdate: { type: "boolean" },
       defaultAccount: { type: "string" },
       accounts: {
         type: "object",
@@ -58,6 +59,10 @@ export const MingleConfigSchema: ReturnType<typeof buildJsonChannelConfigSchema>
       consumerId: {
         label: "Consumer ID",
         help: "Stable Event Center consumer identity. Keep this unchanged across restarts.",
+      },
+      autoUpdate: {
+        label: "Automatic updates",
+        help: "Install verified openclaw-mingle releases automatically. Enabled by default.",
       },
     },
   },

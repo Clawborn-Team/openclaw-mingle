@@ -39,6 +39,10 @@ export function listMingleAccountIds(cfg: OpenClawConfig): string[] {
   ];
 }
 
+export function isMingleAutoUpdateEnabled(cfg: OpenClawConfig): boolean {
+  return channelConfig(cfg).autoUpdate !== false;
+}
+
 export function resolveMingleAccount(
   cfg: OpenClawConfig,
   accountId?: string | null,

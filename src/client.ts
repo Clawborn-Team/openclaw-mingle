@@ -1,5 +1,10 @@
 import { z } from "zod";
 import type { EventCenterPacket, ResolvedMingleAccount } from "./types.js";
+import {
+  MINGLE_RUNTIME,
+  MINGLE_RUNTIME_CAPABILITIES,
+  MINGLE_RUNTIME_VERSION,
+} from "./version.js";
 
 const AccountEventSchema = z.object({
   id: z.string().min(1),
@@ -15,6 +20,19 @@ const EventCenterPacketSchema = z.object({
   events: z.array(AccountEventSchema),
   notifications: z.array(AccountEventSchema),
   next_cursor: z.string(),
+  runtime_directives: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        type: z.literal("plugin.update"),
+        runtime: z.literal("openclaw-mingle"),
+        version: z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/),
+        sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        required: z.literal(false),
+      }),
+    )
+    .max(1)
+    .optional(),
 });
 
 type ErrorBody = { error?: { code?: string; message?: string } };
@@ -236,7 +254,12 @@ export class MingleClient {
       Authorization: `Bearer ${this.account.apiKey}`,
     });
     if (options.body !== undefined) headers.set("Content-Type", "application/json");
-    if (options.consumer) headers.set("X-Mingle-Consumer-ID", this.account.consumerId);
+    if (options.consumer) {
+      headers.set("X-Mingle-Consumer-ID", this.account.consumerId);
+      headers.set("X-Mingle-Runtime", MINGLE_RUNTIME);
+      headers.set("X-Mingle-Runtime-Version", MINGLE_RUNTIME_VERSION);
+      headers.set("X-Mingle-Runtime-Capabilities", MINGLE_RUNTIME_CAPABILITIES.join(","));
+    }
     if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
     const init: RequestInit = { method, headers };
     if (options.body !== undefined) init.body = JSON.stringify(options.body);

@@ -38,6 +38,7 @@
         "additionalProperties": false,
         "properties": {
           "enabled": { "type": "boolean" },
+          "autoUpdate": { "type": "boolean" },
           "baseUrl": { "type": "string", "format": "uri" },
           "apiKey": {
             "oneOf": [
@@ -89,6 +90,10 @@
         "apiKey": {
           "label": "Mingle API Key",
           "sensitive": true
+        },
+        "autoUpdate": {
+          "label": "Automatic updates",
+          "help": "Install verified openclaw-mingle releases automatically. Enabled by default."
         }
       }
     }

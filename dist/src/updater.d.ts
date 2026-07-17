@@ -20,6 +20,15 @@ export type PluginUpdaterOptions = {
     timeoutMs?: number;
     maxBytes?: number;
 };
+export declare function retryDelayForAttempt(attempt: number): number;
+type DetachedSpawner = (executable: string, args: string[], options: {
+    detached: true;
+    stdio: "ignore";
+    shell: false;
+}) => {
+    unref(): void;
+};
+export declare function scheduleDetachedInstall(params: ScheduleInstallParams, spawnDetached?: DetachedSpawner): Promise<void>;
 export declare function releaseAssetUrl(version: string): string;
 export declare class PluginUpdater {
     readonly store: UpdateStateStore;
@@ -40,3 +49,4 @@ export declare class PluginUpdater {
     private considerEligible;
     private downloadVerified;
 }
+export {};

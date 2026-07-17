@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import {
   resolveUpdateDirectory,
@@ -66,8 +68,40 @@ function compareVersions(left: StableVersion, right: StableVersion): number {
   return 0;
 }
 
-function retryDelay(attempt: number): number {
+export function retryDelayForAttempt(attempt: number): number {
   return RETRY_DELAYS_MS[Math.min(Math.max(attempt - 1, 0), RETRY_DELAYS_MS.length - 1)]!;
+}
+
+type DetachedSpawner = (
+  executable: string,
+  args: string[],
+  options: { detached: true; stdio: "ignore"; shell: false },
+) => { unref(): void };
+
+const defaultDetachedSpawner: DetachedSpawner = (executable, args, options) =>
+  spawn(executable, args, options);
+
+export async function scheduleDetachedInstall(
+  params: ScheduleInstallParams,
+  spawnDetached: DetachedSpawner = defaultDetachedSpawner,
+): Promise<void> {
+  const helperPath = fileURLToPath(new URL("./update-helper.js", import.meta.url));
+  const child = spawnDetached(
+    process.execPath,
+    [
+      helperPath,
+      "--state-dir",
+      params.stateDir,
+      "--tarball-path",
+      params.tarballPath,
+      "--version",
+      params.version,
+      "--directive-id",
+      params.directiveId,
+    ],
+    { detached: true, stdio: "ignore", shell: false },
+  );
+  child.unref();
 }
 
 function snapshotFromState(
@@ -203,7 +237,7 @@ export class PluginUpdater {
         ...available,
         state: "failed",
         errorCode,
-        nextAttemptAt: this.now() + retryDelay(attempt),
+        nextAttemptAt: this.now() + retryDelayForAttempt(attempt),
       };
       await this.store.save(failed);
       return snapshotFromState(failed);

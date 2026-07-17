@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { resolveUpdateDirectory, UpdateStateStore, } from "./update-state.js";
 import { MINGLE_RUNTIME_VERSION } from "./version.js";
@@ -34,8 +36,24 @@ function compareVersions(left, right) {
     }
     return 0;
 }
-function retryDelay(attempt) {
+export function retryDelayForAttempt(attempt) {
     return RETRY_DELAYS_MS[Math.min(Math.max(attempt - 1, 0), RETRY_DELAYS_MS.length - 1)];
+}
+const defaultDetachedSpawner = (executable, args, options) => spawn(executable, args, options);
+export async function scheduleDetachedInstall(params, spawnDetached = defaultDetachedSpawner) {
+    const helperPath = fileURLToPath(new URL("./update-helper.js", import.meta.url));
+    const child = spawnDetached(process.execPath, [
+        helperPath,
+        "--state-dir",
+        params.stateDir,
+        "--tarball-path",
+        params.tarballPath,
+        "--version",
+        params.version,
+        "--directive-id",
+        params.directiveId,
+    ], { detached: true, stdio: "ignore", shell: false });
+    child.unref();
 }
 function snapshotFromState(state, disabled = false) {
     if (!state)
@@ -153,7 +171,7 @@ export class PluginUpdater {
                 ...available,
                 state: "failed",
                 errorCode,
-                nextAttemptAt: this.now() + retryDelay(attempt),
+                nextAttemptAt: this.now() + retryDelayForAttempt(attempt),
             };
             await this.store.save(failed);
             return snapshotFromState(failed);

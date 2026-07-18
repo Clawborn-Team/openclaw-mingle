@@ -19,7 +19,8 @@
     "README.md"
   ],
   "bin": {
-    "mingle-openclaw-install": "./bin/install.mjs"
+    "mingle-openclaw-install": "./bin/install.mjs",
+    "mingle-connect": "./bin/mingle-connect.mjs"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

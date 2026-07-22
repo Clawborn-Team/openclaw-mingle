@@ -12,4 +12,4 @@ user's OpenClaw Gateway.
 lifecycle scripts disabled) — see [ADR-0006](../docs/decisions/0006-runtime-immutable-tarball-release.md)
 and skill [`release-openclaw-mingle`](../.claude/skills/release-openclaw-mingle/SKILL.md).
 
-**Canonical repo doc:** [`README.md`](README.md). Deep design: [`docs/`](docs/). Don't duplicate here.
+**Canonical repo doc:** [`README.md`](README.md). Deep design: [`docs/README.md`](docs/README.md) (repo doc subtree). Don't duplicate here.
